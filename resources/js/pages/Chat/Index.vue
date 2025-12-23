@@ -1,48 +1,11 @@
 <template>
   <div class="h-screen flex bg-gray-100 dark:bg-gray-900 overflow-hidden">
-    <!-- Mobile Header (visible only on mobile) -->
-    <div
-      class="md:hidden bg-telegram-blue dark:bg-telegram-dark-blue text-white p-4 flex items-center justify-between fixed top-0 left-0 right-0 z-50"
-    >
-      <button
-        @click="showMobileSidebar = !showMobileSidebar"
-        class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M4 6h16M4 12h16M4 18h16"
-          />
-        </svg>
-      </button>
-      <h1 class="text-lg font-medium">
-        {{ selectedChat ? getChatDisplayName(selectedChat) : "Chat" }}
-      </h1>
-      <button
-        @click="showUserList = true"
-        class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 4v16m8-8H4"
-          />
-        </svg>
-      </button>
-    </div>
-
-    <!-- Left Sidebar - Chat List -->
+    <!-- Left Sidebar - Chat List (Desktop only) -->
     <div
       :class="[
-        'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out',
-        'md:w-80 md:relative md:translate-x-0',
-        'fixed md:static top-0 left-0 h-full w-80 z-40',
-        showMobileSidebar ? 'translate-x-0' : '-translate-x-full',
-        selectedChat && !showMobileSidebar ? 'md:flex hidden' : '',
+        'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col',
+        'w-80 relative translate-x-0',
+        'hidden md:flex',
       ]"
     >
       <!-- Header -->
@@ -168,22 +131,8 @@
       </div>
     </div>
 
-    <!-- Mobile Overlay -->
-    <div
-      v-if="showMobileSidebar"
-      @click="showMobileSidebar = false"
-      class="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
-    ></div>
-
     <!-- Right Side - Chat Content -->
-    <div
-      :class="[
-        'flex-1 flex flex-col bg-white dark:bg-gray-800 h-screen transition-all duration-300',
-        'md:ml-0',
-        showMobileSidebar && selectedChat ? 'hidden md:flex' : 'flex',
-        'pt-16 md:pt-0',
-      ]"
-    >
+    <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 h-screen">
       <div v-if="!selectedChat" class="flex-1 flex items-center justify-center">
         <div class="text-center">
           <div
@@ -301,7 +250,7 @@
 
         <!-- Messages -->
         <div
-          class="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-140px)] sm:max-h-[calc(100vh-100px)] relative"
+          class="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-100px)] relative"
           ref="messagesContainer"
           @scroll="handleScroll"
           :style="{
@@ -677,7 +626,6 @@ const chatList = ref([...props.chats]); // Local reactive copy of chats
 const showScrollToBottom = ref(false); // Show scroll to bottom button
 const onlineUsers = ref(new Set()); // Track online users
 const userStatuses = ref({}); // Track detailed user statuses
-const showMobileSidebar = ref(true); // Control mobile sidebar visibility
 
 // Computed
 const page = usePage();
@@ -706,9 +654,6 @@ const loadChatMessages = async (chat) => {
 const selectChat = async (chat) => {
   selectedChat.value = chat;
   await loadChatMessages(chat);
-
-  // Hide mobile sidebar when chat is selected
-  showMobileSidebar.value = false;
 
   // Mark messages as read
   try {
