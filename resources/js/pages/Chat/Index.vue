@@ -227,7 +227,7 @@
 
         <!-- Messages -->
         <div
-          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-200px)]"
+          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-100px)]"
           ref="messagesContainer"
           :style="{
             backgroundImage: `url(data:image/svg+xml,${encodeURIComponent(svgBg)})`,
@@ -339,7 +339,7 @@
         <div
           class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 mt-auto"
         >
-          <form @submit.prevent="sendMessage" class="flex items-end space-x-3">
+          <form @submit.prevent="sendMessage" class="flex items-center space-x-3">
             <!-- Attachment button -->
             <button
               type="button"
@@ -356,7 +356,7 @@
             </button>
 
             <!-- Message input -->
-            <div class="flex-1 relative">
+            <div class="flex-1 relative mt-1">
               <textarea
                 v-model="newMessage"
                 @keydown.enter.exact.prevent="sendMessage"
