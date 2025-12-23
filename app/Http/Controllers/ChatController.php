@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Events\MessageSent;
 use App\Events\MessageRead;
 use App\Events\UserOnlineStatus;
+use App\Events\ChatCreated;
+use App\Events\ChatUpdated;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\User;
@@ -87,6 +89,14 @@ class ChatController extends Controller
                 'recipient_id' => $recipientId,
                 'is_new' => true
             ]);
+
+            // Broadcast chat creation to both participants
+            broadcast(new ChatCreated($chat));
+            Log::info('ChatCreated event broadcasted', [
+                'chat_id' => $chat->id,
+                'user_id' => $user->id,
+                'recipient_id' => $recipientId
+            ]);
         }
 
         return response()->json([
@@ -118,11 +128,20 @@ class ChatController extends Controller
         $broadcastEvent = new MessageSent($message->load('user'));
         broadcast($broadcastEvent)->toOthers();
 
+        // Broadcast chat update to update chat lists
+        broadcast(new ChatUpdated($chat, $message));
+
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
             'message_id' => $message->id,
             'channel' => 'chat.' . $chat->id,
             'user_id' => $user->id
+        ]);
+
+        Log::info('ChatUpdated event broadcasted', [
+            'chat_id' => $chat->id,
+            'message_id' => $message->id,
+            'last_message' => $request->message
         ]);
 
         return response()->json([

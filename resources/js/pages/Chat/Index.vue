@@ -1,8 +1,49 @@
 <template>
   <div class="h-screen flex bg-gray-100 dark:bg-gray-900 overflow-hidden">
+    <!-- Mobile Header (visible only on mobile) -->
+    <div
+      class="md:hidden bg-telegram-blue dark:bg-telegram-dark-blue text-white p-4 flex items-center justify-between fixed top-0 left-0 right-0 z-50"
+    >
+      <button
+        @click="showMobileSidebar = !showMobileSidebar"
+        class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M4 6h16M4 12h16M4 18h16"
+          />
+        </svg>
+      </button>
+      <h1 class="text-lg font-medium">
+        {{ selectedChat ? getChatDisplayName(selectedChat) : "Chat" }}
+      </h1>
+      <button
+        @click="showUserList = true"
+        class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+      </button>
+    </div>
+
     <!-- Left Sidebar - Chat List -->
     <div
-      class="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col"
+      :class="[
+        'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-300 ease-in-out',
+        'md:w-80 md:relative md:translate-x-0',
+        'fixed md:static top-0 left-0 h-full w-80 z-40',
+        showMobileSidebar ? 'translate-x-0' : '-translate-x-full',
+        selectedChat && !showMobileSidebar ? 'md:flex hidden' : '',
+      ]"
     >
       <!-- Header -->
       <div
@@ -127,8 +168,22 @@
       </div>
     </div>
 
+    <!-- Mobile Overlay -->
+    <div
+      v-if="showMobileSidebar"
+      @click="showMobileSidebar = false"
+      class="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+    ></div>
+
     <!-- Right Side - Chat Content -->
-    <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 h-screen">
+    <div
+      :class="[
+        'flex-1 flex flex-col bg-white dark:bg-gray-800 h-screen transition-all duration-300',
+        'md:ml-0',
+        showMobileSidebar && selectedChat ? 'hidden md:flex' : 'flex',
+        'pt-16 md:pt-0',
+      ]"
+    >
       <div v-if="!selectedChat" class="flex-1 flex items-center justify-center">
         <div class="text-center">
           <div
@@ -246,12 +301,12 @@
 
         <!-- Messages -->
         <div
-          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-100px)] relative"
+          class="flex-1 overflow-y-auto p-2 sm:p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-140px)] sm:max-h-[calc(100vh-100px)] relative"
           ref="messagesContainer"
           @scroll="handleScroll"
           :style="{
             backgroundImage: `url(data:image/svg+xml,${encodeURIComponent(svgBg)})`,
-            minHeight: '300px',
+            minHeight: '200px',
           }"
         >
           <div v-if="currentChatMessages.length === 0" class="text-center py-16">
@@ -276,31 +331,33 @@
             <p class="text-gray-400 dark:text-gray-500 text-sm">Birinchi xabar yozing!</p>
           </div>
 
-          <div class="space-y-3">
+          <div class="space-y-2 sm:space-y-3">
             <div
               v-for="message in currentChatMessages"
               :key="message.id"
-              class="flex items-end gap-2"
+              class="flex items-end gap-1 sm:gap-2"
               :class="message.user_id === user.id ? 'flex-row-reverse' : 'flex-row'"
             >
               <!-- Avatar for received messages -->
               <div
                 v-if="message.user_id !== user.id"
-                class="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
+                class="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-medium shrink-0"
               >
                 {{ getUserDisplayName(message.user).charAt(0).toUpperCase() }}
               </div>
 
               <!-- Message Bubble -->
               <div
-                class="max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm"
+                class="max-w-[250px] sm:max-w-xs lg:max-w-md px-3 py-2 sm:px-4 rounded-2xl shadow-sm"
                 :class="
                   message.user_id === user.id
                     ? 'bg-telegram-blue text-white rounded-br-md'
                     : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md'
                 "
               >
-                <p class="text-sm leading-relaxed break-words">{{ message.message }}</p>
+                <p class="text-sm sm:text-base leading-relaxed break-words">
+                  {{ message.message }}
+                </p>
                 <div class="flex items-center justify-end mt-1 gap-1">
                   <span
                     class="text-xs"
@@ -355,10 +412,13 @@
           </div>
 
           <!-- Scroll to Bottom Button -->
-          <div v-if="showScrollToBottom" class="fixed bottom-25 right-6 z-50">
+          <div
+            v-if="showScrollToBottom"
+            class="fixed bottom-20 sm:bottom-25 right-4 sm:right-6 z-50"
+          >
             <button
               @click="scrollToBottom"
-              class="w-10 h-10 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-110 opacity-90 hover:opacity-100"
+              class="w-12 h-12 sm:w-10 sm:h-10 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-110 opacity-90 hover:opacity-100 touch-manipulation"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -375,13 +435,16 @@
 
       <!-- Message Input -->
       <div
-        class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 mt-auto"
+        class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-2 sm:p-4 bg-white dark:bg-gray-800 mt-auto"
       >
-        <form @submit.prevent="sendMessage" class="flex items-center space-x-3">
+        <form
+          @submit.prevent="sendMessage"
+          class="flex items-center space-x-2 sm:space-x-3"
+        >
           <!-- Attachment button -->
           <button
             type="button"
-            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            class="p-2 sm:p-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors touch-manipulation"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -400,15 +463,15 @@
               @keydown.enter.exact.prevent="sendMessage"
               placeholder="Xabar yozing..."
               rows="1"
-              class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-telegram-blue resize-none max-h-32"
+              class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 dark:bg-gray-700 border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-telegram-blue resize-none max-h-32 text-sm sm:text-base touch-manipulation"
               :disabled="sending"
-              style="min-height: 44px"
+              style="min-height: 40px"
             ></textarea>
 
             <!-- Emoji button -->
             <button
               type="button"
-              class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              class="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1 touch-manipulation"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -425,7 +488,7 @@
           <button
             type="submit"
             :disabled="!newMessage.trim() || sending"
-            class="w-11 h-11 bg-telegram-blue hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center transition-colors"
+            class="w-10 h-10 sm:w-11 sm:h-11 bg-telegram-blue hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center transition-colors touch-manipulation"
           >
             <svg
               v-if="!sending"
@@ -614,6 +677,7 @@ const chatList = ref([...props.chats]); // Local reactive copy of chats
 const showScrollToBottom = ref(false); // Show scroll to bottom button
 const onlineUsers = ref(new Set()); // Track online users
 const userStatuses = ref({}); // Track detailed user statuses
+const showMobileSidebar = ref(true); // Control mobile sidebar visibility
 
 // Computed
 const page = usePage();
@@ -642,6 +706,9 @@ const loadChatMessages = async (chat) => {
 const selectChat = async (chat) => {
   selectedChat.value = chat;
   await loadChatMessages(chat);
+
+  // Hide mobile sidebar when chat is selected
+  showMobileSidebar.value = false;
 
   // Mark messages as read
   try {
@@ -846,7 +913,6 @@ const getUserDisplayName = (user) => {
 
 const getChatDisplayName = (chat) => {
   if (!chat) return "Suhbat";
-
   // Current user
   const currentUserId = props.user.id;
 
@@ -932,8 +998,6 @@ const setupEcho = () => {
   }
 
   const channelName = `chat.${selectedChat.value.id}`;
-  console.log("🎯 Setting up Echo for selected chat:", channelName);
-  console.log("🔍 Expected channel will be: private-" + channelName);
 
   // Leave any previous channels
   window.Echo.leave(channelName);
@@ -942,7 +1006,6 @@ const setupEcho = () => {
   console.log("📡 Creating private channel listener...");
 
   const channel = window.Echo.private(channelName);
-  console.log("📻 Channel created:", typeof channel, channel);
 
   // Listen specifically to message.sent
   channel
@@ -1005,7 +1068,9 @@ const setupEcho = () => {
             console.log(`⚠️ Message ${messageId} not found in current messages`);
           }
         });
-        console.log(`📖 Total messages updated: ${updatedCount} of ${eventData.message_ids.length}`);
+        console.log(
+          `📖 Total messages updated: ${updatedCount} of ${eventData.message_ids.length}`
+        );
       } else {
         console.error("❌ Invalid message_ids in read event:", eventData);
       }
@@ -1016,8 +1081,6 @@ const setupEcho = () => {
     .error((error) => {
       console.error(`❌ Subscription error for ${channelName}:`, error);
     });
-
-  console.log("🎯 Echo setup completed for chat:", selectedChat.value.id);
 };
 
 // Setup global Echo listeners for all user's chats
@@ -1127,14 +1190,14 @@ const setupOnlineStatusListeners = () => {
 
       window.Echo.channel(statusChannel)
         .listen(".status.updated", (eventData) => {
-          console.log(`👤 User status updated:`, eventData);
-
           if (eventData.is_online) {
             onlineUsers.value.add(eventData.user_id);
             console.log(`🟢 User ${eventData.user_id} (${eventData.name}) is now online`);
           } else {
             onlineUsers.value.delete(eventData.user_id);
-            console.log(`🔴 User ${eventData.user_id} (${eventData.name}) is now offline`);
+            console.log(
+              `🔴 User ${eventData.user_id} (${eventData.name}) is now offline`
+            );
           }
 
           userStatuses.value[eventData.user_id] = {
@@ -1142,7 +1205,7 @@ const setupOnlineStatusListeners = () => {
             last_seen: eventData.last_seen,
             name: eventData.name,
           };
-          
+
           console.log(`📊 Current online users:`, Array.from(onlineUsers.value));
         })
         .subscribed(() => {
@@ -1174,6 +1237,56 @@ const setupOnlineStatusTracking = () => {
   };
 };
 
+// Set up chat list listeners for real-time updates
+const setupChatListListeners = () => {
+  if (!window.Echo || !props.user) {
+    console.error("❌ Echo not available or user not found for chat list setup");
+    return;
+  }
+
+  const chatListChannel = `user.chats.${props.user.id}`;
+
+  window.Echo.private(chatListChannel)
+    .listen(".chat.created", (eventData) => {
+      console.log(`🆕 New chat created:`, eventData);
+
+      // Add new chat to the beginning of chat list if it doesn't exist
+      const existingChatIndex = chatList.value.findIndex(
+        (chat) => chat.id === eventData.chat.id
+      );
+      if (existingChatIndex === -1) {
+        chatList.value.unshift(eventData.chat);
+        console.log(`✅ Added new chat ${eventData.chat.id} to chat list`);
+      } else {
+        console.log(`🔄 Chat ${eventData.chat.id} already exists in list`);
+      }
+    })
+    .listen(".chat.updated", (eventData) => {
+      console.log(`📝 Chat updated:`, eventData);
+
+      // Find and update existing chat or add to beginning if new
+      const existingChatIndex = chatList.value.findIndex(
+        (chat) => chat.id === eventData.chat.id
+      );
+      if (existingChatIndex !== -1) {
+        // Update existing chat and move to top
+        chatList.value.splice(existingChatIndex, 1);
+        chatList.value.unshift(eventData.chat);
+        console.log(`✅ Updated and moved chat ${eventData.chat.id} to top`);
+      } else {
+        // Add new chat to beginning
+        chatList.value.unshift(eventData.chat);
+        console.log(`✅ Added new chat ${eventData.chat.id} to chat list`);
+      }
+    })
+    .subscribed(() => {
+      console.log(`✅ Chat list subscription successful for user ${props.user.id}`);
+    })
+    .error((error) => {
+      console.error(`❌ Chat list subscription error for user ${props.user.id}:`, error);
+    });
+};
+
 // Watch for new messages (fallback)
 const pollForNewMessages = () => {
   if (selectedChat.value && !window.Echo) {
@@ -1190,6 +1303,9 @@ onMounted(() => {
 
   // Setup online status listeners for all users
   setupOnlineStatusListeners();
+
+  // Setup chat list listeners for real-time updates
+  setupChatListListeners();
 
   // Debug Echo connection
   if (window.Echo) {
