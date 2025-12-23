@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Events\MessageSent;
+use App\Events\MessageRead;
+use App\Events\UserOnlineStatus;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\User;
@@ -142,13 +144,22 @@ class ChatController extends Controller
             ->get();
 
         // Mark unread messages as read by current user
-        ChatMessage::where('chat_id', $chat->id)
+        $unreadMessages = ChatMessage::where('chat_id', $chat->id)
             ->where('user_id', '!=', $user->id) // Not sent by current user
             ->whereNull('read_at') // Not read yet
-            ->update([
-                'read_at' => now(),
-                'read_by' => $user->id
-            ]);
+            ->pluck('id')
+            ->toArray();
+
+        if (!empty($unreadMessages)) {
+            ChatMessage::whereIn('id', $unreadMessages)
+                ->update([
+                    'read_at' => now(),
+                    'read_by' => $user->id
+                ]);
+
+            // Broadcast message read event
+            broadcast(new MessageRead($chat, $user, $unreadMessages));
+        }
 
         return response()->json([
             'messages' => $messages
@@ -210,16 +221,54 @@ class ChatController extends Controller
         }
 
         // Mark all unread messages in this chat as read by current user
-        ChatMessage::where('chat_id', $chat->id)
+        $unreadMessages = ChatMessage::where('chat_id', $chat->id)
             ->where('user_id', '!=', $user->id) // Not sent by current user
             ->whereNull('read_at') // Not read yet
-            ->update([
-                'read_at' => now(),
-                'read_by' => $user->id
-            ]);
+            ->pluck('id')
+            ->toArray();
+
+        if (!empty($unreadMessages)) {
+            ChatMessage::whereIn('id', $unreadMessages)
+                ->update([
+                    'read_at' => now(),
+                    'read_by' => $user->id
+                ]);
+
+            // Broadcast message read event
+            broadcast(new MessageRead($chat, $user, $unreadMessages));
+        }
 
         return response()->json([
             'success' => true
+        ]);
+    }
+
+    public function updateOnlineStatus(): JsonResponse
+    {
+        $user = Auth::user();
+
+        // Update user's last activity
+        $user->update(['last_activity' => now()]);
+
+        // Broadcast online status
+        broadcast(new UserOnlineStatus($user, true));
+
+        return response()->json([
+            'success' => true,
+            'status' => 'online'
+        ]);
+    }
+
+    public function setOfflineStatus(): JsonResponse
+    {
+        $user = Auth::user();
+
+        // Broadcast offline status
+        broadcast(new UserOnlineStatus($user, false));
+
+        return response()->json([
+            'success' => true,
+            'status' => 'offline'
         ]);
     }
 

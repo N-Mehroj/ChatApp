@@ -95,6 +95,12 @@
                 {{ getChatDisplayName(chat) }}
               </h3>
               <div class="flex items-center ml-2">
+                <!-- Online Status Indicator -->
+                <div
+                  v-if="isUserOnline(getOtherUserId(chat))"
+                  class="w-2 h-2 bg-green-500 rounded-full mr-2"
+                  title="Online"
+                ></div>
                 <span
                   v-if="chat.is_new"
                   class="w-2 h-2 bg-telegram-blue rounded-full mr-2"
@@ -183,7 +189,20 @@
                 <h2 class="font-medium text-gray-900 dark:text-white">
                   {{ getChatDisplayName(selectedChat) }}
                 </h2>
-                <p class="text-sm text-telegram-blue">online</p>
+                <p
+                  class="text-sm"
+                  :class="
+                    isUserOnline(getOtherUserId(selectedChat))
+                      ? 'text-green-500'
+                      : 'text-gray-500 dark:text-gray-400'
+                  "
+                >
+                  {{
+                    isUserOnline(getOtherUserId(selectedChat))
+                      ? "online"
+                      : getLastSeenText(getOtherUserId(selectedChat))
+                  }}
+                </p>
               </div>
             </div>
             <div class="flex items-center space-x-2">
@@ -593,6 +612,8 @@ const isLoading = ref(false);
 const isSearching = ref(false);
 const chatList = ref([...props.chats]); // Local reactive copy of chats
 const showScrollToBottom = ref(false); // Show scroll to bottom button
+const onlineUsers = ref(new Set()); // Track online users
+const userStatuses = ref({}); // Track detailed user statuses
 
 // Computed
 const page = usePage();
@@ -965,6 +986,22 @@ const setupEcho = () => {
         console.error("❌ Invalid message data:", messageData);
       }
     })
+    .listen(".message.read", function (eventData) {
+      console.log("📖 Message read event received:", eventData);
+
+      // Update read receipts for the messages
+      if (eventData.message_ids && Array.isArray(eventData.message_ids)) {
+        eventData.message_ids.forEach((messageId) => {
+          const messageIndex = currentChatMessages.value.findIndex(
+            (msg) => msg.id === messageId
+          );
+          if (messageIndex !== -1) {
+            currentChatMessages.value[messageIndex].read_at = eventData.read_at;
+            currentChatMessages.value[messageIndex].read_by = eventData.reader.id;
+          }
+        });
+      }
+    })
     .subscribed(() => {
       console.log(`✅ Successfully subscribed to ${channelName}`);
     })
@@ -988,7 +1025,7 @@ const setupGlobalEcho = () => {
     const channelName = `chat.${chat.id}`;
 
     window.Echo.private(channelName)
-      .listen("message.sent", function (eventData) {
+      .listen(".message.sent", function (eventData) {
         // Extract message data
         let messageData = eventData;
         if (eventData && eventData.message) {
@@ -1021,6 +1058,106 @@ const setupGlobalEcho = () => {
   });
 };
 
+// Online status functions
+const isUserOnline = (userId) => {
+  return onlineUsers.value.has(userId);
+};
+
+const getLastSeenText = (userId) => {
+  const status = userStatuses.value[userId];
+  if (!status || !status.last_seen) return "offline";
+
+  const lastSeen = new Date(status.last_seen);
+  const now = new Date();
+  const diff = now - lastSeen;
+
+  if (diff < 60000) return "just now"; // Less than 1 minute
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`; // Less than 1 hour
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`; // Less than 1 day
+  return `${Math.floor(diff / 86400000)} days ago`;
+};
+
+const getOtherUserId = (chat) => {
+  if (!chat || !props.user) return null;
+  return chat.user_id === props.user.id ? chat.recipient_id : chat.user_id;
+};
+
+// Send online status updates
+const sendOnlineStatus = async () => {
+  try {
+    await axios.post("/api/user/online");
+  } catch (error) {
+    console.error("Error sending online status:", error);
+  }
+};
+
+const sendOfflineStatus = async () => {
+  try {
+    await axios.post("/api/user/offline");
+  } catch (error) {
+    console.error("Error sending offline status:", error);
+  }
+};
+
+// Set up online status listeners for all users
+const setupOnlineStatusListeners = () => {
+  if (!window.Echo) {
+    console.error("❌ Echo not available for online status setup");
+    return;
+  }
+
+  // Listen to all users' status changes
+  chatList.value.forEach((chat) => {
+    const otherUserId = getOtherUserId(chat);
+    if (otherUserId) {
+      const statusChannel = `user-status.${otherUserId}`;
+      console.log(`🔔 Setting up status listener for user ${otherUserId}`);
+
+      window.Echo.channel(statusChannel)
+        .listen(".status.updated", (eventData) => {
+          console.log(`👤 User status updated:`, eventData);
+
+          if (eventData.is_online) {
+            onlineUsers.value.add(eventData.user_id);
+          } else {
+            onlineUsers.value.delete(eventData.user_id);
+          }
+
+          userStatuses.value[eventData.user_id] = {
+            is_online: eventData.is_online,
+            last_seen: eventData.last_seen,
+            name: eventData.name,
+          };
+        })
+        .subscribed(() => {
+          console.log(`✅ Status subscription successful for user ${otherUserId}`);
+        })
+        .error((error) => {
+          console.error(`❌ Status subscription error for user ${otherUserId}:`, error);
+        });
+    }
+  });
+};
+
+// Set up online status tracking
+const setupOnlineStatusTracking = () => {
+  // Send online status immediately
+  sendOnlineStatus();
+
+  // Send online status every 30 seconds
+  const onlineInterval = setInterval(sendOnlineStatus, 30000);
+
+  // Send offline status when page unloads
+  window.addEventListener("beforeunload", sendOfflineStatus);
+
+  // Clean up interval on component unmount
+  return () => {
+    clearInterval(onlineInterval);
+    window.removeEventListener("beforeunload", sendOfflineStatus);
+    sendOfflineStatus();
+  };
+};
+
 // Watch for new messages (fallback)
 const pollForNewMessages = () => {
   if (selectedChat.value && !window.Echo) {
@@ -1031,6 +1168,13 @@ const pollForNewMessages = () => {
 // Initialize
 onMounted(() => {
   loadUsers();
+
+  // Setup online status tracking
+  const cleanupOnlineStatus = setupOnlineStatusTracking();
+
+  // Setup online status listeners for all users
+  setupOnlineStatusListeners();
+
   // Debug Echo connection
   if (window.Echo) {
     console.log("✅ Echo initialized:", window.Echo);

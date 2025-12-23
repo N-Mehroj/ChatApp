@@ -85,6 +85,7 @@ class User extends Authenticatable
         'username',
         'uuid',
         'is_app_installed',
+        'last_activity',
     ];
 
     protected $hidden = [
