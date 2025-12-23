@@ -1,0 +1,148 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\User\UserSourceEnum;
+use App\Imports\Excel\UserImport;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Laravel\Passport\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
+
+/**
+ * @property int $id
+ * @property string $first_name
+ * @property string $last_name
+ * @property string $middle_name
+ * @property string $email
+ * @property string $phone
+ * @property int $status
+ * @property string $last_visit
+ * @property string $sms_code
+ * @property string $code_expiry_date
+ * @property int $code_sent_at Дата отправки сообщения (Unix Timestamp)
+ * @property string $password
+ * @property int $department_id
+ * @property string $position
+ * @property string $image
+ * @property int $organization_id
+ * @property int $telegram_id
+ * @property string $telegram_token Токен для идентификации юзеров через Telegram (два и более аккаунта в ТГ === один аккаунт в БД)
+ * @property string $telegram_auth_token Токен для авторизации через Telegram
+ * @property array $additional_telegram_ids
+ * @property UserSourceEnum $source
+ * @property string $external_id
+ * @property string $username
+ * @property string $uuid
+ * @property bool $is_app_installed
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
+ *
+ * @property Chat $chat
+ * @property Merchant $merchant
+ * @property Collection<int, ChatMessage> $messages
+ * @property Department $department
+ * @property Organization $organization
+ * @property Collection<int, Story> $stories
+ */
+class User extends Authenticatable
+{
+    use  HasFactory, Notifiable;
+
+    protected $fillable = [
+        'first_name',
+        'last_name',
+        'middle_name',
+        'email',
+        'phone',
+        'status',
+        'last_visit',
+        'sms_code',
+        'code_expiry_date',
+        'code_sent_at',
+        'password',
+        'department_id',
+        'position',
+        'image',
+        'organization_id',
+        'telegram_id',
+        'telegram_token',
+        'telegram_auth_token',
+        'additional_telegram_ids',
+        'email_verified_at',
+        'source',
+        'external_id',
+        'username',
+        'uuid',
+        'is_app_installed',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (User $user) {
+            if (empty($user->password)) {
+                $user->password = Hash::make(Str::random(12));
+            }
+
+            $user->phone = str_replace(['-', ' ', '+'], '', $user->phone);
+            $user->telegram_token = bin2hex(random_bytes(24));
+        });
+
+        static::deleting(function (User $user): void {
+            $user->messages()->delete();
+            $user->chat()->delete();
+        });
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'telegram_id' => 'int',
+            'additional_telegram_ids' => 'array',
+        ];
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', 1);
+    }
+
+    public function chat(): HasOne
+    {
+        return $this->hasOne(Chat::class);
+    }
+
+    public function merchant(): HasOne
+    {
+        return $this->hasOne(Merchant::class);
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(ChatMessage::class);
+    }
+
+    public function favorites(): BelongsToMany
+    {
+        return $this->belongsToMany(Merchant::class);
+    }
+}

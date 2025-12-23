@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "/home/nmehroj/.config/herd-lite/bin/php",
+            "args": [
+                "/home/nmehroj/Desktop/Amedia/ChatApp/artisan",
+                "boost:mcp"
+            ]
+        }
+    }
+}
