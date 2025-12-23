@@ -16,3 +16,8 @@ Broadcast::channel('chat.{chatId}', function ($user, $chatId) {
     return $chat->isParticipant($user) ||
         $chat->messages()->where('user_id', $user->id)->exists();
 });
+
+// Public channel for user online status - no authentication needed
+Broadcast::channel('user-status.{userId}', function () {
+    return true; // Allow everyone to listen to status updates
+});

@@ -991,6 +991,7 @@ const setupEcho = () => {
 
       // Update read receipts for the messages
       if (eventData.message_ids && Array.isArray(eventData.message_ids)) {
+        let updatedCount = 0;
         eventData.message_ids.forEach((messageId) => {
           const messageIndex = currentChatMessages.value.findIndex(
             (msg) => msg.id === messageId
@@ -998,8 +999,15 @@ const setupEcho = () => {
           if (messageIndex !== -1) {
             currentChatMessages.value[messageIndex].read_at = eventData.read_at;
             currentChatMessages.value[messageIndex].read_by = eventData.reader.id;
+            updatedCount++;
+            console.log(`✅ Updated read status for message ${messageId}`);
+          } else {
+            console.log(`⚠️ Message ${messageId} not found in current messages`);
           }
         });
+        console.log(`📖 Total messages updated: ${updatedCount} of ${eventData.message_ids.length}`);
+      } else {
+        console.error("❌ Invalid message_ids in read event:", eventData);
       }
     })
     .subscribed(() => {
@@ -1085,17 +1093,21 @@ const getOtherUserId = (chat) => {
 // Send online status updates
 const sendOnlineStatus = async () => {
   try {
-    await axios.post("/api/user/online");
+    console.log("📡 Sending online status...");
+    const response = await axios.post("/api/user/online");
+    console.log("✅ Online status sent successfully:", response.data);
   } catch (error) {
-    console.error("Error sending online status:", error);
+    console.error("❌ Error sending online status:", error);
   }
 };
 
 const sendOfflineStatus = async () => {
   try {
-    await axios.post("/api/user/offline");
+    console.log("📡 Sending offline status...");
+    const response = await axios.post("/api/user/offline");
+    console.log("✅ Offline status sent successfully:", response.data);
   } catch (error) {
-    console.error("Error sending offline status:", error);
+    console.error("❌ Error sending offline status:", error);
   }
 };
 
@@ -1119,8 +1131,10 @@ const setupOnlineStatusListeners = () => {
 
           if (eventData.is_online) {
             onlineUsers.value.add(eventData.user_id);
+            console.log(`🟢 User ${eventData.user_id} (${eventData.name}) is now online`);
           } else {
             onlineUsers.value.delete(eventData.user_id);
+            console.log(`🔴 User ${eventData.user_id} (${eventData.name}) is now offline`);
           }
 
           userStatuses.value[eventData.user_id] = {
@@ -1128,6 +1142,8 @@ const setupOnlineStatusListeners = () => {
             last_seen: eventData.last_seen,
             name: eventData.name,
           };
+          
+          console.log(`📊 Current online users:`, Array.from(onlineUsers.value));
         })
         .subscribed(() => {
           console.log(`✅ Status subscription successful for user ${otherUserId}`);

@@ -158,7 +158,13 @@ class ChatController extends Controller
                 ]);
 
             // Broadcast message read event
-            broadcast(new MessageRead($chat, $user, $unreadMessages));
+            $event = new MessageRead($chat, $user, $unreadMessages);
+            broadcast($event);
+            Log::info('MessageRead event broadcasted (getMessages)', [
+                'chat_id' => $chat->id,
+                'reader_id' => $user->id,
+                'message_count' => count($unreadMessages)
+            ]);
         }
 
         return response()->json([
@@ -235,7 +241,13 @@ class ChatController extends Controller
                 ]);
 
             // Broadcast message read event
-            broadcast(new MessageRead($chat, $user, $unreadMessages));
+            $event = new MessageRead($chat, $user, $unreadMessages);
+            broadcast($event);
+            Log::info('MessageRead event broadcasted (markAsRead)', [
+                'chat_id' => $chat->id,
+                'reader_id' => $user->id,
+                'message_count' => count($unreadMessages)
+            ]);
         }
 
         return response()->json([
@@ -251,7 +263,9 @@ class ChatController extends Controller
         $user->update(['last_activity' => now()]);
 
         // Broadcast online status
-        broadcast(new UserOnlineStatus($user, true));
+        $event = new UserOnlineStatus($user, true);
+        broadcast($event);
+        Log::info('User online status broadcasted', ['user_id' => $user->id, 'status' => 'online']);
 
         return response()->json([
             'success' => true,
@@ -264,7 +278,9 @@ class ChatController extends Controller
         $user = Auth::user();
 
         // Broadcast offline status
-        broadcast(new UserOnlineStatus($user, false));
+        $event = new UserOnlineStatus($user, false);
+        broadcast($event);
+        Log::info('User offline status broadcasted', ['user_id' => $user->id, 'status' => 'offline']);
 
         return response()->json([
             'success' => true,
