@@ -133,7 +133,130 @@
 
     <!-- Right Side - Chat Content -->
     <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 h-screen">
-      <div v-if="!selectedChat" class="flex-1 flex items-center justify-center">
+      <!-- Mobile Chat List (when no chat selected) -->
+      <div v-if="!selectedChat" class="md:hidden flex flex-col h-full">
+        <!-- Mobile Header for Chat List -->
+        <div
+          class="bg-telegram-blue dark:bg-telegram-dark-blue text-white p-4 flex items-center justify-between"
+        >
+          <h1 class="text-lg font-medium">Chat</h1>
+          <button
+            @click="showUserList = true"
+            class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Mobile Search Bar -->
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="relative">
+            <svg
+              class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              placeholder="Qidirish..."
+              class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-md text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-telegram-blue"
+            />
+          </div>
+        </div>
+
+        <!-- Mobile Chat List -->
+        <div class="flex-1 overflow-y-auto">
+          <div v-if="chatList.length === 0" class="p-6 text-center">
+            <div
+              class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+            >
+              <svg
+                class="w-8 h-8 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400 mb-2">Hozircha suhbat yo'q</p>
+            <p class="text-gray-400 dark:text-gray-500 text-sm">
+              Yangi suhbat boshlash uchun + tugmasini bosing
+            </p>
+          </div>
+
+          <div
+            v-for="chat in chatList"
+            :key="chat.id"
+            @click="selectChat(chat)"
+            class="flex items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-200 dark:border-gray-700 transition-colors"
+          >
+            <div
+              class="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium mr-3 shrink-0"
+            >
+              {{ getChatDisplayName(chat).charAt(0).toUpperCase() }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between mb-1">
+                <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {{ getChatDisplayName(chat) }}
+                  <span
+                    v-if="isUserOnline(getOtherUserId(chat))"
+                    class="inline-block w-2 h-2 bg-green-400 rounded-full ml-2"
+                  ></span>
+                </p>
+                <p
+                  v-if="chat.latest_message"
+                  class="text-xs text-gray-500 dark:text-gray-400"
+                >
+                  {{ formatTime(chat.latest_message.created_at) }}
+                </p>
+              </div>
+              <p
+                v-if="chat.latest_message"
+                class="text-sm text-gray-600 dark:text-gray-300 truncate"
+              >
+                {{ chat.latest_message.message }}
+              </p>
+              <p v-else class="text-sm text-gray-400 dark:text-gray-500 italic">
+                Hozircha xabar yo'q
+              </p>
+            </div>
+            <div
+              v-if="chat.unread_count > 0"
+              class="ml-2 bg-telegram-blue text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center"
+            >
+              {{ chat.unread_count }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop Empty State / Mobile Chat Interface -->
+      <div
+        v-if="!selectedChat"
+        class="hidden md:flex flex-1 flex items-center justify-center"
+      >
         <div class="text-center">
           <div
             class="w-32 h-32 mx-auto mb-6 rounded-full bg-gradient-to-br from-telegram-blue to-blue-600 flex items-center justify-center"
@@ -160,9 +283,54 @@
       </div>
 
       <div v-else class="flex-1 flex flex-col h-full max-h-screen overflow-hidden">
-        <!-- Chat Header -->
+        <!-- Mobile Chat Header (with back button) -->
         <div
-          class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4"
+          class="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center"
+        >
+          <button
+            @click="selectedChat = null"
+            class="w-8 h-8 mr-3 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+          <div
+            class="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium mr-3"
+          >
+            {{ getChatDisplayName(selectedChat).charAt(0).toUpperCase() }}
+          </div>
+          <div class="flex-1">
+            <h2 class="font-medium text-gray-900 dark:text-white">
+              {{ getChatDisplayName(selectedChat) }}
+              <span
+                v-if="isUserOnline(getOtherUserId(selectedChat))"
+                class="inline-block w-2 h-2 bg-green-400 rounded-full ml-2"
+              ></span>
+            </h2>
+            <p
+              v-if="isUserOnline(getOtherUserId(selectedChat))"
+              class="text-xs text-green-500"
+            >
+              Onlayn
+            </p>
+            <p
+              v-else-if="getLastSeenText(getOtherUserId(selectedChat))"
+              class="text-xs text-gray-500 dark:text-gray-400"
+            >
+              {{ getLastSeenText(getOtherUserId(selectedChat)) }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Desktop Chat Header -->
+        <div
+          class="hidden md:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4"
         >
           <div class="flex items-center justify-between">
             <div class="flex items-center">
