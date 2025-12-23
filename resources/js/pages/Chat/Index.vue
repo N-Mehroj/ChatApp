@@ -636,11 +636,8 @@ const sendMessage = async () => {
     console.log("Message sent successfully:", response.data);
     console.log("Server response message:", response.data.message);
 
-    currentChatMessages.value.push(response.data.message);
-    console.log(
-      "Message added locally. Total messages:",
-      currentChatMessages.value.length
-    );
+    // Message will be added via WebSocket, no need to add locally
+    console.log("Message sent, waiting for WebSocket update...");
     await nextTick();
     scrollToBottom();
   } catch (error) {
@@ -925,7 +922,7 @@ const setupEcho = () => {
         if (!exists) {
           currentChatMessages.value.push(messageData);
           console.log(
-            "🆕 Message added! Total messages:",
+            "🆕 Message added via WebSocket! Total messages:",
             currentChatMessages.value.length
           );
           nextTick(() => scrollToBottom());

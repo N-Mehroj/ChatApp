@@ -114,7 +114,7 @@ class ChatController extends Controller
         $chat->touch();
 
         $broadcastEvent = new MessageSent($message->load('user'));
-        broadcast($broadcastEvent);
+        broadcast($broadcastEvent)->toOthers();
 
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
