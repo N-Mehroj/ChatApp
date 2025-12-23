@@ -31,4 +31,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/api/user/offline', [ChatController::class, 'setOfflineStatus'])->name('api.user.offline');
 });
 
-require __DIR__ . '/settings.php';
+// Widget routes (public access)
+Route::prefix('widget')->group(function () {
+    Route::get('/', function () {
+        return Inertia::render('Widget/ChatWidget');
+    })->name('widget.index');
+
+    Route::get('/demo', function () {
+        return view('widget.demo');
+    })->name('widget.demo');
+});
+
+// Serve widget assets
+Route::get('/widget/sdk.js', function () {
+    return response()->file(public_path('widget/sdk.js'));
+})->name('widget.sdk');
+
+require __DIR__.'/settings.php';

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Widget Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .info {
+            background: #f0f7ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #3B82F6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #2563EB;
+        }
+
+        .log {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Chat Widget Integration Test</h1>
+
+        <div class="info">
+            <strong>Test Status:</strong> This page tests the embedded chat widget functionality.
+            The widget should appear in the bottom-right corner with a chat button.
+        </div>
+
+        <div class="test-section">
+            <h3>Widget Controls</h3>
+            <button onclick="testInit()">Initialize Widget</button>
+            <button onclick="testShow()">Show Widget</button>
+            <button onclick="testHide()">Hide Widget</button>
+            <button onclick="testDestroy()">Destroy Widget</button>
+            <button onclick="clearLog()">Clear Log</button>
+
+            <div id="log" class="log">Widget log will appear here...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>Page Content</h3>
+            <p>This is sample content to demonstrate how the chat widget overlays on top of existing page content.</p>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et
+                dolore magna aliqua.</p>
+            <p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo
+                consequat.</p>
+            <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+            </p>
+        </div>
+    </div>
+
+    <!-- Chat Widget SDK -->
+    <script src="sdk.js"></script>
+
+    <script>
+        let logElement = document.getElementById('log');
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}<br>`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log('ChatWidget Test:', message);
+        }
+
+        function clearLog() {
+            logElement.innerHTML = '';
+        }
+
+        function testInit() {
+            log('Initializing widget...');
+
+            // Detect if running locally and adjust widget URL accordingly
+            let widgetUrl = '/widget';
+            if (window.location.protocol === 'file:') {
+                widgetUrl = '.'; // Current directory when running locally
+                log('Detected local file:// protocol, using relative paths');
+            }
+
+            ChatWidget.init({
+                apiKey: 'widget_LuaRsY9xvkrnJBRg0kWrIBZUSWoY48jO',
+                widgetUrl: widgetUrl,
+                debug: true,
+                primaryColor: '#10B981',
+                position: 'bottom-right'
+            });
+        }
+
+        function testShow() {
+            log('Showing widget...');
+            if (ChatWidget.show) {
+                ChatWidget.show();
+            } else {
+                log('Show method not available');
+            }
+        }
+
+        function testHide() {
+            log('Hiding widget...');
+            if (ChatWidget.hide) {
+                ChatWidget.hide();
+            } else {
+                log('Hide method not available');
+            }
+        }
+
+        function testDestroy() {
+            log('Destroying widget...');
+            if (ChatWidget.destroy) {
+                ChatWidget.destroy();
+            } else {
+                log('Destroy method not available');
+            }
+        }
+
+        // Override console.log to capture widget logs
+        const originalConsoleLog = console.log;
+        console.log = function (...args) {
+            if (args[0] && args[0].includes && args[0].includes('ChatWidget')) {
+                log(args.join(' '));
+            }
+            originalConsoleLog.apply(console, args);
+        };
+
+        // Auto-initialize for demonstration
+        window.addEventListener('load', function () {
+            log('Page loaded. Auto-initializing widget...');
+            setTimeout(testInit, 1000);
+        });
+    </script>
+</body>
+
+</html>

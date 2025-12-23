@@ -3,11 +3,9 @@
 namespace App\Models;
 
 use App\Enums\User\UserSourceEnum;
-use App\Imports\Excel\UserImport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -16,8 +14,6 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Laravel\Passport\HasApiTokens;
-use Spatie\Permission\Traits\HasRoles;
 
 /**
  * @property int $id
@@ -47,7 +43,6 @@ use Spatie\Permission\Traits\HasRoles;
  * @property bool $is_app_installed
  * @property Carbon $created_at
  * @property Carbon $updated_at
- *
  * @property Chat $chat
  * @property Merchant $merchant
  * @property Collection<int, ChatMessage> $messages
@@ -57,7 +52,7 @@ use Spatie\Permission\Traits\HasRoles;
  */
 class User extends Authenticatable
 {
-    use  HasFactory, Notifiable;
+    use HasFactory, Notifiable;
 
     protected $fillable = [
         'first_name',
@@ -86,6 +81,8 @@ class User extends Authenticatable
         'uuid',
         'is_app_installed',
         'last_activity',
+        'api_key',
+        'role',
     ];
 
     protected $hidden = [
