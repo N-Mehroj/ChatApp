@@ -227,8 +227,9 @@
 
         <!-- Messages -->
         <div
-          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-100px)]"
+          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-100px)] relative"
           ref="messagesContainer"
+          @scroll="handleScroll"
           :style="{
             backgroundImage: `url(data:image/svg+xml,${encodeURIComponent(svgBg)})`,
             minHeight: '300px',
@@ -333,118 +334,167 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Message Input -->
-        <div
-          class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 mt-auto"
-        >
-          <form @submit.prevent="sendMessage" class="flex items-center space-x-3">
-            <!-- Attachment button -->
+          <!-- Scroll to Bottom Button -->
+          <div v-if="showScrollToBottom" class="fixed bottom-25 right-6 z-50">
             <button
-              type="button"
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+              @click="scrollToBottom"
+              class="w-10 h-10 bg-gray-600 hover:bg-gray-700 text-white rounded-full shadow-xl flex items-center justify-center transition-all duration-300 hover:scale-110 opacity-90 hover:opacity-100"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
                   stroke-width="2"
-                  d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                />
-              </svg>
-            </button>
-
-            <!-- Message input -->
-            <div class="flex-1 relative mt-1">
-              <textarea
-                v-model="newMessage"
-                @keydown.enter.exact.prevent="sendMessage"
-                placeholder="Xabar yozing..."
-                rows="1"
-                class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-telegram-blue resize-none max-h-32"
-                :disabled="sending"
-                style="min-height: 44px"
-              ></textarea>
-
-              <!-- Emoji button -->
-              <button
-                type="button"
-                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                <svg
-                  class="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Send button -->
-            <button
-              type="submit"
-              :disabled="!newMessage.trim() || sending"
-              class="w-11 h-11 bg-telegram-blue hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center transition-colors"
-            >
-              <svg
-                v-if="!sending"
-                class="w-5 h-5 text-white"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-              <div
-                v-else
-                class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
-              ></div>
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <!-- User Selection Modal -->
-    <div
-      v-if="showUserList"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-      @click.self="showUserList = false"
-    >
-      <div
-        class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full max-h-[600px] overflow-hidden shadow-2xl"
-      >
-        <div class="bg-telegram-blue dark:bg-telegram-dark-blue text-white p-4">
-          <div class="flex items-center justify-between">
-            <h3 class="font-medium text-lg">Yangi Suhbat</h3>
-            <button
-              @click="showUserList = false"
-              class="text-white/80 hover:text-white transition-colors"
-            >
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
+                  d="M19 14l-7 7m0 0l-7-7m7 7V3"
                 />
               </svg>
             </button>
           </div>
         </div>
+      </div>
 
-        <!-- Search -->
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="relative">
+      <!-- Message Input -->
+      <div
+        class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 mt-auto"
+      >
+        <form @submit.prevent="sendMessage" class="flex items-center space-x-3">
+          <!-- Attachment button -->
+          <button
+            type="button"
+            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+              />
+            </svg>
+          </button>
+
+          <!-- Message input -->
+          <div class="flex-1 relative mt-1">
+            <textarea
+              v-model="newMessage"
+              @keydown.enter.exact.prevent="sendMessage"
+              placeholder="Xabar yozing..."
+              rows="1"
+              class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 border-0 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-telegram-blue resize-none max-h-32"
+              :disabled="sending"
+              style="min-height: 44px"
+            ></textarea>
+
+            <!-- Emoji button -->
+            <button
+              type="button"
+              class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Send button -->
+          <button
+            type="submit"
+            :disabled="!newMessage.trim() || sending"
+            class="w-11 h-11 bg-telegram-blue hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-full flex items-center justify-center transition-colors"
+          >
             <svg
-              class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+              v-if="!sending"
+              class="w-5 h-5 text-white"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+            <div
+              v-else
+              class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"
+            ></div>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Selection Modal -->
+  <div
+    v-if="showUserList"
+    class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+    @click.self="showUserList = false"
+  >
+    <div
+      class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full max-h-[600px] overflow-hidden shadow-2xl"
+    >
+      <div class="bg-telegram-blue dark:bg-telegram-dark-blue text-white p-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-medium text-lg">Yangi Suhbat</h3>
+          <button
+            @click="showUserList = false"
+            class="text-white/80 hover:text-white transition-colors"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="relative">
+          <svg
+            class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            v-model="searchQuery"
+            @input="handleSearchInput"
+            type="text"
+            placeholder="Qidirish..."
+            class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-telegram-blue"
+          />
+        </div>
+      </div>
+
+      <div class="overflow-y-auto max-h-80">
+        <div v-if="isSearching" class="p-8 text-center">
+          <div
+            class="w-8 h-8 border-2 border-telegram-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"
+          ></div>
+          <p class="text-gray-500 dark:text-gray-400">Qidirilmoqda...</p>
+        </div>
+
+        <div
+          v-else-if="availableUsers.length === 0 && searchQuery.trim()"
+          class="p-8 text-center"
+        >
+          <div class="text-gray-400 mb-2">
+            <svg
+              class="w-12 h-12 mx-auto"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -452,106 +502,70 @@
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                stroke-width="2"
+                stroke-width="1"
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <input
-              v-model="searchQuery"
-              @input="handleSearchInput"
-              type="text"
-              placeholder="Qidirish..."
-              class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border-0 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-telegram-blue"
-            />
           </div>
+          <p class="text-gray-500 dark:text-gray-400">
+            "{{ searchQuery }}" bo'yicha hech narsa topilmadi
+          </p>
+          <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">
+            Boshqa nom yoki email kiriting
+          </p>
         </div>
 
-        <div class="overflow-y-auto max-h-80">
-          <div v-if="isSearching" class="p-8 text-center">
-            <div
-              class="w-8 h-8 border-2 border-telegram-blue border-t-transparent rounded-full animate-spin mx-auto mb-4"
-            ></div>
-            <p class="text-gray-500 dark:text-gray-400">Qidirilmoqda...</p>
-          </div>
-
-          <div
-            v-else-if="availableUsers.length === 0 && searchQuery.trim()"
-            class="p-8 text-center"
-          >
-            <div class="text-gray-400 mb-2">
-              <svg
-                class="w-12 h-12 mx-auto"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-            </div>
-            <p class="text-gray-500 dark:text-gray-400">
-              "{{ searchQuery }}" bo'yicha hech narsa topilmadi
-            </p>
-            <p class="text-gray-400 dark:text-gray-500 text-sm mt-1">
-              Boshqa nom yoki email kiriting
-            </p>
-          </div>
-
-          <div v-else-if="availableUsers.length === 0" class="p-8 text-center">
-            <div class="text-gray-400 mb-2">
-              <svg
-                class="w-12 h-12 mx-auto"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1"
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zm-13.5 0a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-                />
-              </svg>
-            </div>
-            <p class="text-gray-500 dark:text-gray-400">Boshqa foydalanuvchilar yo'q</p>
-          </div>
-
-          <div
-            v-for="user in availableUsers"
-            :key="user.id"
-            @click="startChat(user)"
-            class="flex items-center p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-100 dark:border-gray-700/50"
-          >
-            <div
-              class="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium mr-3"
+        <div v-else-if="availableUsers.length === 0" class="p-8 text-center">
+          <div class="text-gray-400 mb-2">
+            <svg
+              class="w-12 h-12 mx-auto"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              {{ getUserDisplayName(user).charAt(0).toUpperCase() }}
-            </div>
-            <div class="flex-1">
-              <h4 class="font-medium text-gray-900 dark:text-white">
-                {{ getUserDisplayName(user) }}
-              </h4>
-              <p class="text-sm text-gray-500 dark:text-gray-400">{{ user.email }}</p>
-            </div>
-            <div class="text-telegram-blue">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </div>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1"
+                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zm-13.5 0a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+              />
+            </svg>
+          </div>
+          <p class="text-gray-500 dark:text-gray-400">Boshqa foydalanuvchilar yo'q</p>
+        </div>
+
+        <div
+          v-for="user in availableUsers"
+          :key="user.id"
+          @click="startChat(user)"
+          class="flex items-center p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-100 dark:border-gray-700/50"
+        >
+          <div
+            class="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium mr-3"
+          >
+            {{ getUserDisplayName(user).charAt(0).toUpperCase() }}
+          </div>
+          <div class="flex-1">
+            <h4 class="font-medium text-gray-900 dark:text-white">
+              {{ getUserDisplayName(user) }}
+            </h4>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ user.email }}</p>
+          </div>
+          <div class="text-telegram-blue">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
           </div>
         </div>
       </div>
     </div>
   </div>
+  <!-- </div> -->
 </template>
 
 <script setup>
@@ -578,6 +592,7 @@ const messagesContainer = ref(null);
 const isLoading = ref(false);
 const isSearching = ref(false);
 const chatList = ref([...props.chats]); // Local reactive copy of chats
+const showScrollToBottom = ref(false); // Show scroll to bottom button
 
 // Computed
 const page = usePage();
@@ -864,7 +879,22 @@ const formatTime = (timestamp) => {
 
 const scrollToBottom = () => {
   if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
+    messagesContainer.value.scrollTo({
+      top: messagesContainer.value.scrollHeight,
+      behavior: "smooth",
+    });
+    showScrollToBottom.value = false; // Hide button when scrolled to bottom
+  }
+};
+
+// Handle scroll event to show/hide scroll to bottom button
+const handleScroll = () => {
+  if (messagesContainer.value) {
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value;
+    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100; // 100px threshold
+    const hasScrolledFromTop = scrollTop > 200; // Show button when scrolled 200px from top
+    showScrollToBottom.value =
+      !isNearBottom && hasScrolledFromTop && currentChatMessages.value.length > 3;
   }
 };
 
@@ -1020,6 +1050,7 @@ onMounted(() => {
 // Watch for chat selection changes
 watch(selectedChat, (newChat) => {
   if (newChat) {
+    showScrollToBottom.value = false; // Reset scroll button when changing chat
     loadChatMessages(newChat);
     setupEcho(); // Setup real-time for new chat
   }
