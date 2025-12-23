@@ -22,6 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/chat', [ChatController::class, 'store'])->name('chat.store');
     Route::post('/chat/{chat}/message', [ChatController::class, 'sendMessage'])->name('chat.send-message');
     Route::get('/chat/{chat}/messages', [ChatController::class, 'getMessages'])->name('chat.messages');
+    Route::post('/chat/{chat}/mark-read', [ChatController::class, 'markAsRead'])->name('chat.mark-read');
     Route::get('/api/user/chats', [ChatController::class, 'getUserChats'])->name('api.user.chats');
     Route::get('/api/users/search', [ChatController::class, 'searchUsers'])->name('api.users.search');
 });

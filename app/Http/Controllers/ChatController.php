@@ -141,6 +141,15 @@ class ChatController extends Controller
             ->orderBy('created_at', 'asc')
             ->get();
 
+        // Mark unread messages as read by current user
+        ChatMessage::where('chat_id', $chat->id)
+            ->where('user_id', '!=', $user->id) // Not sent by current user
+            ->whereNull('read_at') // Not read yet
+            ->update([
+                'read_at' => now(),
+                'read_by' => $user->id
+            ]);
+
         return response()->json([
             'messages' => $messages
         ]);
@@ -189,6 +198,28 @@ class ChatController extends Controller
 
         return response()->json([
             'users' => $users
+        ]);
+    }
+
+    public function markAsRead(Chat $chat): JsonResponse
+    {
+        $user = Auth::user();
+
+        if (!$this->userCanAccessChat($user, $chat)) {
+            abort(403);
+        }
+
+        // Mark all unread messages in this chat as read by current user
+        ChatMessage::where('chat_id', $chat->id)
+            ->where('user_id', '!=', $user->id) // Not sent by current user
+            ->whereNull('read_at') // Not read yet
+            ->update([
+                'read_at' => now(),
+                'read_by' => $user->id
+            ]);
+
+        return response()->json([
+            'success' => true
         ]);
     }
 

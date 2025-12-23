@@ -27,6 +27,12 @@ class ChatMessage extends Model
         'from_operator',
         'message',
         'message_id',
+        'read_at',
+        'read_by',
+    ];
+
+    protected $casts = [
+        'read_at' => 'datetime',
     ];
 
     public function chat(): BelongsTo
@@ -37,5 +43,15 @@ class ChatMessage extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function readBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'read_by');
+    }
+
+    public function isReadBy(User $user): bool
+    {
+        return $this->read_at !== null && $this->read_by === $user->id;
     }
 }

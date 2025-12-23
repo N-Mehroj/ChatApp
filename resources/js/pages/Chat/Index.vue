@@ -122,7 +122,7 @@
     </div>
 
     <!-- Right Side - Chat Content -->
-    <div class="flex-1 flex flex-col bg-white dark:bg-gray-800">
+    <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 h-screen">
       <div v-if="!selectedChat" class="flex-1 flex items-center justify-center">
         <div class="text-center">
           <div
@@ -149,7 +149,7 @@
         </div>
       </div>
 
-      <div v-else class="flex-1 flex flex-col">
+      <div v-else class="flex-1 flex flex-col h-full max-h-screen overflow-hidden">
         <!-- Chat Header -->
         <div
           class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4"
@@ -227,11 +227,11 @@
 
         <!-- Messages -->
         <div
-          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900"
+          class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-900 max-h-[calc(100vh-200px)]"
           ref="messagesContainer"
           :style="{
             backgroundImage: `url(data:image/svg+xml,${encodeURIComponent(svgBg)})`,
-            minHeight: '400px',
+            minHeight: '300px',
           }"
         >
           <div v-if="currentChatMessages.length === 0" class="text-center py-16">
@@ -256,7 +256,7 @@
             <p class="text-gray-400 dark:text-gray-500 text-sm">Birinchi xabar yozing!</p>
           </div>
 
-          <div class="space-y-3 overflow-x-auto h-[calc(100vh-200px)]">
+          <div class="space-y-3">
             <div
               v-for="message in currentChatMessages"
               :key="message.id"
@@ -292,14 +292,43 @@
                   >
                     {{ formatTime(message.created_at) }}
                   </span>
-                  <svg
-                    v-if="message.user_id === user.id"
-                    class="w-4 h-4 text-white/70"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                  </svg>
+                  <!-- Read Receipt Icons -->
+                  <div v-if="message.user_id === user.id" class="flex items-center ml-1">
+                    <!-- Single Check (Sent) -->
+                    <svg
+                      v-if="!message.read_at"
+                      class="w-4 h-4 text-white/70"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
+                      />
+                    </svg>
+                    <!-- Double Check (Read) - Telegram style -->
+                    <div v-else class="relative flex items-center">
+                      <!-- First check (behind) -->
+                      <svg
+                        class="w-4 h-4 text-blue-400"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
+                        />
+                      </svg>
+                      <!-- Second check (overlapping) -->
+                      <svg
+                        class="w-4 h-4 text-blue-400 -ml-3"
+                        fill="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
+                        />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -308,7 +337,7 @@
 
         <!-- Message Input -->
         <div
-          class="fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 z-50"
+          class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800 mt-auto"
         >
           <form @submit.prevent="sendMessage" class="flex items-end space-x-3">
             <!-- Attachment button -->
@@ -577,6 +606,15 @@ const loadChatMessages = async (chat) => {
 const selectChat = async (chat) => {
   selectedChat.value = chat;
   await loadChatMessages(chat);
+
+  // Mark messages as read
+  try {
+    await axios.post(`/chat/${chat.id}/mark-read`);
+    console.log("✅ Messages marked as read for chat:", chat.id);
+  } catch (error) {
+    console.error("❌ Error marking messages as read:", error);
+  }
+
   setupEcho(); // Setup real-time messaging
 };
 
