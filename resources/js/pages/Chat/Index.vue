@@ -833,11 +833,8 @@ const selectChat = async (chat) => {
   selectedChat.value = chat;
   await loadChatMessages(chat);
 
-  // Clear unread count for the selected chat
-  const chatIndex = chatList.value.findIndex((c) => c.id === chat.id);
-  if (chatIndex !== -1) {
-    chatList.value[chatIndex].unread_count = 0;
-  }
+  // Clear unread count for the selected chat using helper function
+  resetUnreadCount(chat.id);
 
   // Mark messages as read
   try {
@@ -1007,29 +1004,59 @@ const clearSearch = () => {
     searchTimeout = null;
   }
 };
+
+// Reset unread count for specific chat
+const resetUnreadCount = (chatId) => {
+  const chatIndex = chatList.value.findIndex((chat) => chat.id === chatId);
+  if (chatIndex !== -1) {
+    const oldCount = chatList.value[chatIndex].unread_count;
+    chatList.value[chatIndex].unread_count = 0;
+    console.log(`📖 Reset unread count for chat ${chatId}: ${oldCount} -> 0`);
+  }
+};
 // Update chat in list when new message arrives
 const updateChatInList = (chatId, message) => {
   const chatIndex = chatList.value.findIndex((chat) => chat.id === chatId);
   if (chatIndex !== -1) {
+    const currentChat = chatList.value[chatIndex];
+
     // Update the last message and move to top
     const updatedChat = {
-      ...chatList.value[chatIndex],
+      ...currentChat,
       last_message: message,
       updated_at: message.created_at,
       is_new: message.user_id !== props.user.id, // Only mark as new if from another user
     };
 
-    // Update unread count if message is from another user and not currently viewing this chat
-    if (
-      message.user_id !== props.user.id &&
-      (!selectedChat.value || selectedChat.value.id !== chatId)
-    ) {
-      updatedChat.unread_count = (updatedChat.unread_count || 0) + 1;
+    // Update unread count if message is from another user
+    if (message.user_id !== props.user.id) {
+      // If this chat is currently selected and active, don't increment unread count
+      if (selectedChat.value && selectedChat.value.id === chatId) {
+        // Keep unread count as 0 for active chat
+        updatedChat.unread_count = 0;
+        console.log(`🔄 Message for active chat ${chatId}, keeping unread count at 0`);
+      } else {
+        // Increment unread count for inactive chats
+        const currentUnread = parseInt(currentChat.unread_count || 0);
+        updatedChat.unread_count = currentUnread + 1;
+        console.log(
+          `🆕 Incremented unread count for chat ${chatId}: ${currentUnread} -> ${updatedChat.unread_count}`
+        );
+      }
+    } else {
+      // Message from current user, keep existing unread count
+      updatedChat.unread_count = parseInt(currentChat.unread_count || 0);
     }
 
     // Remove from current position and add to top
     chatList.value.splice(chatIndex, 1);
     chatList.value.unshift(updatedChat);
+
+    console.log(
+      `✅ Updated chat ${chatId} in list with unread count: ${updatedChat.unread_count}`
+    );
+  } else {
+    console.warn(`⚠️ Chat ${chatId} not found in chat list`);
   }
 };
 // Helper functions
@@ -1228,6 +1255,12 @@ const setupEcho = () => {
             console.log(`⚠️ Message ${messageId} not found in current messages`);
           }
         });
+
+        // Reset unread count for this chat when messages are marked as read
+        if (eventData.chat_id && updatedCount > 0) {
+          resetUnreadCount(eventData.chat_id);
+        }
+
         console.log(
           `📖 Total messages updated: ${updatedCount} of ${eventData.message_ids.length}`
         );
