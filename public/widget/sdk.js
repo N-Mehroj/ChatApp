@@ -196,11 +196,11 @@
             const container = document.createElement('div');
             container.id = 'chat-widget-container';
             container.style.cssText = `
-        position: fixed;
-        z-index: 999999;
-        pointer-events: none;
-        ${this.getPositionCSS()}
-      `;
+                position: fixed;
+                z-index: 999999;
+                pointer-events: none;
+                ${this.getPositionCSS()}
+            `;
 
             document.body.appendChild(container);
             this.log('Widget container created');
