@@ -1196,49 +1196,55 @@ const setupEcho = () => {
     });
 };
 
-// Setup global Echo listeners for all user's chats
+// Setup global Echo listeners for visible chats only (lazy-load approach)
 const setupGlobalEcho = () => {
-  console.log("🌍 setupGlobalEcho called");
+  console.log("🌍 setupGlobalEcho called - limiting to visible chats");
 
   if (!window.Echo) {
     console.error("❌ Echo not available for global setup");
     return;
   }
-  // Listen to all chats this user is part of
-  chatList.value.forEach((chat, index) => {
+
+  // Only subscribe to the first 10 visible chats to prevent excessive channel connections
+  const visibleChats = chatList.value.slice(0, 10);
+
+  visibleChats.forEach((chat) => {
     const channelName = `chat.${chat.id}`;
 
-    window.Echo.private(channelName)
-      .listen(".message.sent", function (eventData) {
-        // Extract message data
-        let messageData = eventData;
-        if (eventData && eventData.message) {
-          messageData = eventData.message;
-        }
+    // Check if already subscribed to avoid duplicate subscriptions
+    if (!window.Echo.connector.channels[channelName]) {
+      window.Echo.private(channelName)
+        .listen(".message.sent", function (eventData) {
+          // Extract message data
+          let messageData = eventData;
+          if (eventData && eventData.message) {
+            messageData = eventData.message;
+          }
 
-        if (messageData && messageData.id) {
-          // Update chat in list
-          updateChatInList(chat.id, messageData);
+          if (messageData && messageData.id) {
+            // Update chat in list
+            updateChatInList(chat.id, messageData);
 
-          // If this is the currently selected chat, add to messages
-          if (selectedChat.value && selectedChat.value.id === chat.id) {
-            const exists = currentChatMessages.value.some(
-              (msg) => msg.id === messageData.id
-            );
-            if (!exists) {
-              currentChatMessages.value.push(messageData);
-              console.log("🆕 Global message added to current chat");
-              nextTick(() => scrollToBottom());
+            // If this is the currently selected chat, add to messages
+            if (selectedChat.value && selectedChat.value.id === chat.id) {
+              const exists = currentChatMessages.value.some(
+                (msg) => msg.id === messageData.id
+              );
+              if (!exists) {
+                currentChatMessages.value.push(messageData);
+                console.log("🆕 Global message added to current chat");
+                nextTick(() => scrollToBottom());
+              }
             }
           }
-        }
-      })
-      .subscribed(() => {
-        console.log(`✅ Global subscription successful`);
-      })
-      .error((error) => {
-        console.error(`❌ Global subscription error for ${channelName}:`, error);
-      });
+        })
+        .subscribed(() => {
+          console.log(`✅ Subscribed to ${channelName}`);
+        })
+        .error((error) => {
+          console.error(`❌ Subscription error for ${channelName}:`, error);
+        });
+    }
   });
 };
 

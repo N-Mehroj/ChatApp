@@ -22,18 +22,22 @@ class ChatController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-        // return  $user;
-        $chats = Chat::with(['user', 'lastMessage'])
-            ->when($user->role == 'support', function ($query) use ($user) {
-                $query->where(function ($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                        ->orWhereHas('messages', function ($mq) use ($user) {
-                            $mq->where('user_id', $user->id);
-                        });
-                });
-            })
-            ->latest('updated_at')
-            ->get();
+
+        // For support users, limit to recent chats to reduce data load
+        $chatsQuery = Chat::with(['user', 'lastMessage']);
+
+        if ($user->isSupport()) {
+            // Support users see all chats but limited to 50 most recent
+            $chatsQuery = $chatsQuery->latest('updated_at')->limit(50);
+        } else {
+            // Regular users see only their chats
+            $chatsQuery = $chatsQuery->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhere('recipient_id', $user->id);
+            })->latest('updated_at');
+        }
+
+        $chats = $chatsQuery->get();
 
         return Inertia::render('Chat/Index', [
             'chats' => $chats,
@@ -49,14 +53,23 @@ class ChatController extends Controller
             abort(403);
         }
 
+        // Load only the latest 50 messages for performance
         $messages = ChatMessage::with('user')
             ->where('chat_id', $chat->id)
-            ->orderBy('created_at', 'asc')
-            ->get();
+            ->orderBy('created_at', 'desc')
+            ->limit(50)
+            ->get()
+            ->reverse()
+            ->values();
 
         $chat->update(['is_new' => false]);
 
-        $users = User::where('id', '!=', $user->id)->get();
+        // Limit users to 50 for support users to prevent excessive data load
+        $usersQuery = User::where('id', '!=', $user->id);
+        if ($user->isSupport()) {
+            $usersQuery = $usersQuery->limit(50);
+        }
+        $users = $usersQuery->get();
 
         return Inertia::render('Chat/Show', [
             'chat' => $chat->load(['user', 'lastMessage']),
@@ -116,7 +129,7 @@ class ChatController extends Controller
 
         $user = Auth::user();
 
-        if (!$this->userCanAccessChat($user, $chat)) {
+        if (! $this->userCanAccessChat($user, $chat)) {
             abort(403);
         }
 
