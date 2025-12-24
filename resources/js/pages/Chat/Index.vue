@@ -14,6 +14,7 @@
       >
         <h1 class="text-lg font-medium">Chat</h1>
         <button
+          v-if="user.role && ['support', 'admin'].includes(user.role)"
           @click="showUserList = true"
           class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
         >
@@ -108,7 +109,7 @@
                 </span>
                 <!-- Online Status Indicator -->
                 <div
-                  v-if="isUserOnline(getOtherUserId(chat))"
+                  v-if="chat.user && isUserOnline(chat.user.id)"
                   class="w-2 h-2 bg-green-500 rounded-full mr-2"
                   title="Online"
                 ></div>
@@ -148,6 +149,7 @@
         >
           <h1 class="text-lg font-medium">Chat</h1>
           <button
+            v-if="user.role && ['support', 'admin'].includes(user.role)"
             @click="showUserList = true"
             class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
           >
@@ -228,7 +230,7 @@
                 <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {{ getChatDisplayName(chat) }}
                   <span
-                    v-if="isUserOnline(getOtherUserId(chat))"
+                    v-if="chat.user && isUserOnline(chat.user.id)"
                     class="inline-block w-2 h-2 bg-green-400 rounded-full ml-2"
                   ></span>
                 </p>
@@ -316,21 +318,21 @@
             <h2 class="font-medium text-gray-900 dark:text-white">
               {{ getChatDisplayName(selectedChat) }}
               <span
-                v-if="isUserOnline(getOtherUserId(selectedChat))"
+                v-if="selectedChat.user && isUserOnline(selectedChat.user.id)"
                 class="inline-block w-2 h-2 bg-green-400 rounded-full ml-2"
               ></span>
             </h2>
             <p
-              v-if="isUserOnline(getOtherUserId(selectedChat))"
+              v-if="selectedChat.user && isUserOnline(selectedChat.user.id)"
               class="text-xs text-green-500"
             >
               Onlayn
             </p>
             <p
-              v-else-if="getLastSeenText(getOtherUserId(selectedChat))"
+              v-else-if="selectedChat.user && getLastSeenText(selectedChat.user.id)"
               class="text-xs text-gray-500 dark:text-gray-400"
             >
-              {{ getLastSeenText(getOtherUserId(selectedChat)) }}
+              {{ getLastSeenText(selectedChat.user.id) }}
             </p>
           </div>
         </div>
@@ -371,15 +373,17 @@
                 <p
                   class="text-sm"
                   :class="
-                    isUserOnline(getOtherUserId(selectedChat))
+                    selectedChat.user && isUserOnline(selectedChat.user.id)
                       ? 'text-green-500'
                       : 'text-gray-500 dark:text-gray-400'
                   "
                 >
                   {{
-                    isUserOnline(getOtherUserId(selectedChat))
+                    selectedChat.user && isUserOnline(selectedChat.user.id)
                       ? "online"
-                      : getLastSeenText(getOtherUserId(selectedChat))
+                      : selectedChat.user
+                      ? getLastSeenText(selectedChat.user.id)
+                      : "Offline"
                   }}
                 </p>
               </div>
@@ -557,8 +561,9 @@
         </div>
       </div>
 
-      <!-- Message Input -->
+      <!-- Message Input - Only for Support Users -->
       <div
+        v-if="user.role && ['support', 'admin'].includes(user.role)"
         class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-2 sm:p-4 bg-white dark:bg-gray-800 mt-auto"
       >
         <form
@@ -852,6 +857,12 @@ const selectChat = async (chat) => {
 const sendMessage = async () => {
   if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
 
+  // Only support users can send messages
+  if (!props.user.role || !["support", "admin"].includes(props.user.role)) {
+    console.error("Only support users can send messages");
+    return;
+  }
+
   const messageText = newMessage.value.trim();
   newMessage.value = "";
   sending.value = true;
@@ -970,7 +981,7 @@ const startChat = async (user) => {
 
   try {
     const response = await axios.post("/chat", {
-      recipient_id: user.id,
+      user_id: user.id,
     });
 
     const newChat = response.data.chat;
@@ -1080,23 +1091,11 @@ const getUserDisplayName = (user) => {
 };
 
 const getChatDisplayName = (chat) => {
-  if (!chat) return "Suhbat";
-  // Current user
-  const currentUserId = props.user.id;
+  if (!chat || !chat.user) return "Suhbat";
 
-  // If chat has recipient and user, find the other participant
-  if (chat.recipient && chat.user) {
-    const otherUser = chat.user.id === currentUserId ? chat.recipient : chat.user;
-    return getUserDisplayName(otherUser);
-  }
-
-  // Fallback: use chat.user if available
-  if (chat.user && chat.user.id !== currentUserId) {
-    return getUserDisplayName(chat.user);
-  }
-
-  // Final fallback
-  return "Suhbat";
+  // For support tickets, always show the customer (chat.user)
+  const customer = chat.user;
+  return getUserDisplayName(customer);
 };
 
 const formatTime = (timestamp) => {
@@ -1434,11 +1433,6 @@ const getLastSeenText = (userId) => {
   return `${Math.floor(diff / 86400000)} days ago`;
 };
 
-const getOtherUserId = (chat) => {
-  if (!chat || !props.user) return null;
-  return chat.user_id === props.user.id ? chat.recipient_id : chat.user_id;
-};
-
 // Send online status updates
 const sendOnlineStatus = async () => {
   try {
@@ -1469,7 +1463,7 @@ const setupOnlineStatusListeners = () => {
 
   // Listen to all users' status changes
   chatList.value.forEach((chat) => {
-    const otherUserId = getOtherUserId(chat);
+    const otherUserId = chat.user ? chat.user.id : null;
     if (otherUserId) {
       const statusChannel = `user-status.${otherUserId}`;
       console.log(`🔔 Setting up status listener for user ${otherUserId}`);

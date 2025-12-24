@@ -51,7 +51,6 @@ class WidgetController extends Controller
             // Get or create chat for this session
             $chat = Chat::firstOrCreate([
                 'user_id' => $merchant->id,
-                'recipient_id' => null, // Widget visitor
                 'widget_session_id' => $session->id,
             ]);
 
@@ -79,7 +78,7 @@ class WidgetController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Widget session creation failed: '.$e->getMessage());
+            \Log::error('Widget session creation failed: ' . $e->getMessage());
 
             return response()->json([
                 'error' => 'Failed to create session',
@@ -152,7 +151,7 @@ class WidgetController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Widget message send failed: '.$e->getMessage());
+            \Log::error('Widget message send failed: ' . $e->getMessage());
 
             return response()->json([
                 'error' => 'Failed to send message',
@@ -210,7 +209,7 @@ class WidgetController extends Controller
                 'agent_typing' => $agentTyping,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Get widget messages failed: '.$e->getMessage());
+            \Log::error('Get widget messages failed: ' . $e->getMessage());
 
             return response()->json([
                 'error' => 'Failed to get messages',
@@ -253,7 +252,7 @@ class WidgetController extends Controller
 
             return response()->json(['status' => 'ok']);
         } catch (\Exception $e) {
-            \Log::error('Widget typing update failed: '.$e->getMessage());
+            \Log::error('Widget typing update failed: ' . $e->getMessage());
 
             return response()->json([
                 'error' => 'Failed to update typing status',
@@ -291,7 +290,7 @@ class WidgetController extends Controller
 
             return response()->json(['status' => 'session ended']);
         } catch (\Exception $e) {
-            \Log::error('Widget session end failed: '.$e->getMessage());
+            \Log::error('Widget session end failed: ' . $e->getMessage());
 
             return response()->json([
                 'error' => 'Failed to end session',

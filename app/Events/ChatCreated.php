@@ -3,10 +3,7 @@
 namespace App\Events;
 
 use App\Models\Chat;
-use App\Models\User;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -17,12 +14,13 @@ class ChatCreated implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public Chat $chat;
+
     public array $participantIds;
 
     public function __construct(Chat $chat)
     {
         $this->chat = $chat;
-        $this->participantIds = [$chat->user_id, $chat->recipient_id];
+        $this->participantIds = [$chat->user_id]; // Only customer for support tickets
     }
 
     public function broadcastOn(): array
@@ -31,6 +29,7 @@ class ChatCreated implements ShouldBroadcastNow
         foreach ($this->participantIds as $userId) {
             $channels[] = new PrivateChannel('user.chats.' . $userId);
         }
+
         return $channels;
     }
 
@@ -42,7 +41,7 @@ class ChatCreated implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'chat' => $this->chat->load(['user', 'recipient', 'lastMessage']),
+            'chat' => $this->chat->load(['user', 'lastMessage']),
         ];
     }
 }

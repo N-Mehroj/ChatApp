@@ -30,11 +30,8 @@ class ChatController extends Controller
             // Support users see all chats but limited to 50 most recent
             $chatsQuery = $chatsQuery->latest('updated_at')->limit(50);
         } else {
-            // Regular users see only their chats
-            $chatsQuery = $chatsQuery->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                    ->orWhere('recipient_id', $user->id);
-            })->latest('updated_at');
+            // Regular users see only their own chats
+            $chatsQuery = $chatsQuery->where('user_id', $user->id)->latest('updated_at');
         }
 
         $chats = $chatsQuery->get();
@@ -87,42 +84,36 @@ class ChatController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'recipient_id' => 'required|exists:users,id',
+            'user_id' => 'required|exists:users,id',
         ]);
 
-        $user = Auth::user();
-        $recipientId = $request->recipient_id;
+        $currentUser = Auth::user();
+        $userId = $request->user_id;
 
-        if ($user->id === (int) $recipientId) {
-            return response()->json(['error' => 'Cannot create chat with yourself'], 400);
+        // Only support users can create chats
+        if (! $currentUser->isSupport()) {
+            return response()->json(['error' => 'Only support users can create chats'], 403);
         }
 
-        $chat = Chat::where(function ($query) use ($user, $recipientId) {
-            $query->where('user_id', $user->id)
-                ->where('recipient_id', $recipientId);
-        })->orWhere(function ($query) use ($user, $recipientId) {
-            $query->where('user_id', $recipientId)
-                ->where('recipient_id', $user->id);
-        })->first();
+        // Check if chat already exists for this user
+        $chat = Chat::where('user_id', $userId)->first();
 
         if (! $chat) {
             $chat = Chat::create([
-                'user_id' => $user->id,
-                'recipient_id' => $recipientId,
+                'user_id' => $userId,
                 'is_new' => true,
             ]);
 
-            // Broadcast chat creation to both participants
+            // Broadcast chat creation to the user
             broadcast(new ChatCreated($chat));
             Log::info('ChatCreated event broadcasted', [
                 'chat_id' => $chat->id,
-                'user_id' => $user->id,
-                'recipient_id' => $recipientId,
+                'user_id' => $userId,
             ]);
         }
 
         return response()->json([
-            'chat' => $chat->load(['user', 'recipient', 'lastMessage']),
+            'chat' => $chat->load(['user', 'lastMessage']),
         ]);
     }
 
@@ -138,10 +129,15 @@ class ChatController extends Controller
             abort(403);
         }
 
+        // Only support users can send messages
+        if (! $user->isSupport()) {
+            return response()->json(['error' => 'Only support users can send messages'], 403);
+        }
+
         $message = ChatMessage::create([
             'chat_id' => $chat->id,
             'user_id' => $user->id,
-            'from_operator' => false,
+            'from_operator' => $user->isSupport(),
             'message' => $request->message,
         ]);
 
@@ -156,8 +152,9 @@ class ChatController extends Controller
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
             'message_id' => $message->id,
-            'channel' => 'chat.' . $chat->id,
+            'channel' => 'chat.'.$chat->id,
             'user_id' => $user->id,
+            'from_operator' => $user->isSupport(),
         ]);
 
         Log::info('ChatUpdated event broadcasted', [
@@ -217,13 +214,18 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        $chats = Chat::with(['user', 'recipient', 'lastMessage'])
-            ->where(function ($query) use ($user) {
-                $query->where('user_id', $user->id)
-                    ->orWhere('recipient_id', $user->id);
-            })
-            ->latest('updated_at')
-            ->get();
+        if ($user->isSupport()) {
+            // Support users see all chats
+            $chats = Chat::with(['user', 'lastMessage'])
+                ->latest('updated_at')
+                ->get();
+        } else {
+            // Regular users see only their own chats
+            $chats = Chat::with(['user', 'lastMessage'])
+                ->where('user_id', $user->id)
+                ->latest('updated_at')
+                ->get();
+        }
 
         return response()->json([
             'chats' => $chats,

@@ -262,7 +262,7 @@ async function startNewChat(user: User) {
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
       },
       body: JSON.stringify({
-        recipient_id: user.id,
+        user_id: user.id,
       }),
     })
 

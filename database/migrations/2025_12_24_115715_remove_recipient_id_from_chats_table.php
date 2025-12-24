@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('chats', function (Blueprint $table) {
-            //
+            $table->dropColumn('recipient_id');
         });
     }
 
@@ -22,7 +22,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('chats', function (Blueprint $table) {
-            //
+            $table->unsignedBigInteger('recipient_id')->nullable()->after('user_id');
+            $table->foreign('recipient_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 };

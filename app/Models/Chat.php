@@ -12,12 +12,10 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $user_id
- * @property int|null $recipient_id
  * @property bool $is_new
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property User $user
- * @property User|null $recipient
  * @property ChatMessage $lastMessage
  * @property Collection<int, ChatMessage> $messages
  */
@@ -25,7 +23,6 @@ class Chat extends Model
 {
     protected $fillable = [
         'user_id',
-        'recipient_id',
         'is_new',
     ];
 
@@ -41,11 +38,6 @@ class Chat extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function recipient(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'recipient_id');
-    }
-
     public function lastMessage(): HasOne
     {
         return $this->hasOne(ChatMessage::class)->latest('id');
@@ -57,25 +49,29 @@ class Chat extends Model
     }
 
     /**
-     * Get the other participant in this chat (not the current user)
+     * Get the customer for this support ticket
      */
-    public function getOtherParticipant(User $currentUser): ?User
+    public function getCustomer(): User
     {
-        if ($this->user_id === $currentUser->id) {
-            return $this->recipient;
-        } elseif ($this->recipient_id === $currentUser->id) {
-            return $this->user;
-        }
-
-        return null;
+        return $this->user;
     }
 
     /**
-     * Check if user is participant in this chat
+     * Check if user can access this chat (customer or support)
      */
     public function isParticipant(User $user): bool
     {
-        return $this->user_id === $user->id || $this->recipient_id === $user->id;
+        // Customer can access their own chat
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+
+        // Support users can access any chat
+        if ($user->isSupport()) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
