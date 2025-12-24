@@ -30,6 +30,32 @@
                 fontSize: 'normal', // 'small', 'normal', 'large'
                 avatarStyle: 'circle', // 'circle', 'square', 'none'
                 messageStyle: 'bubbles' // 'bubbles', 'flat', 'outlined'
+            },
+            // Visibility configurations
+            visibility: {
+                enabled: true, // Show/hide entire chat widget
+                hideForLoggedUsers: false, // Hide widget when user is logged in
+                showOnlyForRoles: [], // Show only for specific roles (empty = show for all)
+                hideOnPages: [], // Hide on specific pages/URLs
+                showOnPages: [] // Show only on specific pages/URLs (empty = show on all)
+            },
+            // Access control configurations
+            access: {
+                allowGuestUsers: true, // Allow non-logged users to chat
+                allowLoggedUsers: true, // Allow logged users to chat
+                restrictedRoles: [], // Roles that cannot send messages
+                requireAuth: false, // Require authentication to chat
+                loginUrl: '/login', // Redirect URL for login requirement
+                readOnlyMode: false // Only show messages, disable input
+            },
+            // User information configurations
+            user: {
+                autoDetect: true, // Automatically detect logged user
+                sendToBackend: true, // Send user info to backend
+                csrfToken: null, // CSRF token for security
+                authHeader: null, // Custom auth header
+                userInfoEndpoint: '/api/user/info', // Endpoint to get user info
+                customUserData: {} // Custom user data to send
             }
         },
 
@@ -45,6 +71,12 @@
 
             this.log('Initializing ChatWidget with config:', this.config);
 
+            // Check widget visibility before proceeding
+            if (!this.shouldShowWidget()) {
+                this.log('Widget hidden by visibility configuration');
+                return;
+            }
+
             // Load CSS
             this.loadCSS();
 
@@ -53,6 +85,291 @@
 
             // Load Vue app
             this.loadVueApp();
+        },
+
+        // Check if widget should be shown based on visibility configuration
+        shouldShowWidget: function () {
+            const config = this.config.visibility;
+
+            // Check if widget is enabled
+            if (!config.enabled) {
+                return false;
+            }
+
+            // Check page-specific visibility
+            const currentUrl = window.location.href;
+
+            // If specific show pages are defined, only show on those pages
+            if (config.showOnPages && config.showOnPages.length > 0) {
+                const shouldShow = config.showOnPages.some(pattern => {
+                    return this.matchesUrlPattern(currentUrl, pattern);
+                });
+                if (!shouldShow) return false;
+            }
+
+            // Check if current page is in hide list
+            if (config.hideOnPages && config.hideOnPages.length > 0) {
+                const shouldHide = config.hideOnPages.some(pattern => {
+                    return this.matchesUrlPattern(currentUrl, pattern);
+                });
+                if (shouldHide) return false;
+            }
+
+            // Check user authentication status
+            const userInfo = this.getCurrentUserInfo();
+
+            // Hide for logged users if configured
+            if (config.hideForLoggedUsers && userInfo.isLoggedIn) {
+                return false;
+            }
+
+            // Check role-specific visibility
+            if (config.showOnlyForRoles && config.showOnlyForRoles.length > 0) {
+                if (!userInfo.isLoggedIn || !config.showOnlyForRoles.includes(userInfo.role)) {
+                    return false;
+                }
+            }
+
+            return true;
+        },
+
+        // Check if user can send messages based on access configuration
+        canUserSendMessages: function () {
+            const config = this.config.access;
+
+            // Check if in read-only mode
+            if (config.readOnlyMode) {
+                return false;
+            }
+
+            const userInfo = this.getCurrentUserInfo();
+
+            // Check authentication requirements
+            if (config.requireAuth && !userInfo.isLoggedIn) {
+                return false;
+            }
+
+            // Check user type access
+            if (userInfo.isLoggedIn) {
+                if (!config.allowLoggedUsers) {
+                    return false;
+                }
+                // Check restricted roles
+                if (config.restrictedRoles && config.restrictedRoles.includes(userInfo.role)) {
+                    return false;
+                }
+            } else {
+                if (!config.allowGuestUsers) {
+                    return false;
+                }
+            }
+
+            return true;
+        },
+
+        // Get current user information (integrates with Laravel authentication)
+        getCurrentUserInfo: function () {
+            // Try to get user info from various sources
+            let userInfo = {
+                isLoggedIn: false,
+                role: null,
+                id: null,
+                name: null,
+                email: null,
+                csrfToken: null
+            };
+
+            // Method 1: Check for Laravel's global user data
+            if (window.Laravel && window.Laravel.user) {
+                userInfo = {
+                    isLoggedIn: true,
+                    id: window.Laravel.user.id,
+                    name: window.Laravel.user.name,
+                    email: window.Laravel.user.email,
+                    role: window.Laravel.user.role,
+                    csrfToken: window.Laravel.csrfToken || this.getCSRFToken()
+                };
+                this.log('User detected from Laravel global:', userInfo.name);
+                return userInfo;
+            }
+
+            // Method 2: Check for meta tags (common Laravel pattern)
+            const userMeta = document.querySelector('meta[name="user-info"]');
+            if (userMeta) {
+                try {
+                    const userData = JSON.parse(userMeta.getAttribute('content'));
+                    userInfo = {
+                        isLoggedIn: true,
+                        ...userData,
+                        csrfToken: this.getCSRFToken()
+                    };
+                    this.log('User detected from meta tag:', userInfo.name);
+                    return userInfo;
+                } catch (e) {
+                    console.warn('Failed to parse user meta tag:', e);
+                }
+            }
+
+            // Method 3: Check for auth cookies/session indicators
+            if (this.hasAuthSession()) {
+                // If we detect auth but no user data, fetch from backend
+                if (this.config.user.autoDetect) {
+                    this.fetchUserInfo().then(info => {
+                        if (info) {
+                            // Update the widget with user info
+                            this.updateUserInfo(info);
+                        }
+                    });
+                }
+                userInfo.isLoggedIn = true;
+                userInfo.csrfToken = this.getCSRFToken();
+            }
+
+            return userInfo;
+        },
+
+        // Update user information in the widget
+        updateUserInfo: function (userInfo) {
+            if (window.ChatWidgetComponent && window.ChatWidgetComponent.updateUser) {
+                window.ChatWidgetComponent.updateUser(userInfo);
+            }
+        },
+
+        // Match URL pattern (supports wildcards)
+        matchesUrlPattern: function (url, pattern) {
+            // Convert pattern to regex (simple implementation)
+            const regexPattern = pattern
+                .replace(/\*/g, '.*')
+                .replace(/\?/g, '\\?');
+            const regex = new RegExp(regexPattern, 'i');
+            return regex.test(url);
+        },
+
+        // Get CSRF token from Laravel
+        getCSRFToken: function () {
+            // Method 1: Meta tag
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            if (csrfMeta) {
+                return csrfMeta.getAttribute('content');
+            }
+
+            // Method 2: Form input
+            const csrfInput = document.querySelector('input[name="_token"]');
+            if (csrfInput) {
+                return csrfInput.value;
+            }
+
+            // Method 3: From config
+            if (this.config.user.csrfToken) {
+                return this.config.user.csrfToken;
+            }
+
+            return null;
+        },
+
+        // Check if user has active authentication session
+        hasAuthSession: function () {
+            // Check for Laravel session cookie
+            const sessionCookie = document.cookie.split(';').find(cookie =>
+                cookie.trim().startsWith('laravel_session=') ||
+                cookie.trim().startsWith('XSRF-TOKEN=')
+            );
+
+            return !!sessionCookie;
+        },
+
+        // Fetch user information from backend
+        fetchUserInfo: async function () {
+            if (!this.config.user.sendToBackend || !this.config.user.userInfoEndpoint) {
+                return null;
+            }
+
+            try {
+                const headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                };
+
+                // Add CSRF token
+                const csrfToken = this.getCSRFToken();
+                if (csrfToken) {
+                    headers['X-CSRF-TOKEN'] = csrfToken;
+                }
+
+                // Add custom auth header if provided
+                if (this.config.user.authHeader) {
+                    headers['Authorization'] = this.config.user.authHeader;
+                }
+
+                const response = await fetch(this.config.user.userInfoEndpoint, {
+                    method: 'GET',
+                    headers: headers,
+                    credentials: 'same-origin' // Include cookies for session auth
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    this.log('User info fetched from backend:', userData.name || userData.id);
+                    return userData;
+                } else if (response.status === 401) {
+                    // User not authenticated
+                    this.log('User not authenticated (401)');
+                    return null;
+                } else {
+                    console.warn('Failed to fetch user info:', response.status);
+                    return null;
+                }
+            } catch (error) {
+                console.error('Error fetching user info:', error);
+                return null;
+            }
+        },
+
+        // Set user information manually
+        setUser: function (userInfo) {
+            this.config.user.customUserData = { ...this.config.user.customUserData, ...userInfo };
+            this.updateUserInfo(userInfo);
+            this.log('User info set manually:', userInfo.name || userInfo.id);
+        },
+
+        // Get secure headers for API requests
+        getSecureHeaders: function (additionalHeaders = {}) {
+            const headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                ...additionalHeaders
+            };
+
+            // Add CSRF token
+            const csrfToken = this.getCSRFToken();
+            if (csrfToken) {
+                headers['X-CSRF-TOKEN'] = csrfToken;
+            }
+
+            // Add custom auth header
+            if (this.config.user.authHeader) {
+                headers['Authorization'] = this.config.user.authHeader;
+            }
+
+            return headers;
+        },
+
+        // Prepare user data for backend transmission
+        prepareUserDataForBackend: function () {
+            const userInfo = this.getCurrentUserInfo();
+            const userData = {
+                ...userInfo,
+                ...this.config.user.customUserData,
+                widget_api_key: this.config.apiKey,
+                timestamp: Date.now(),
+                user_agent: navigator.userAgent,
+                page_url: window.location.href
+            };
+
+            // Remove sensitive data that shouldn't be sent
+            delete userData.csrfToken;
+
+            return userData;
         },
 
         // Get absolute URL for assets
@@ -312,6 +629,10 @@
                 :primary-color="primaryColor"
                 :animations="animations"
                 :design="design"
+                :visibility="visibility"
+                :access="access"
+                :user-config="user"
+                :user-info="userInfo"
               />
             `,
                 data() {
@@ -320,7 +641,11 @@
                         apiUrl: ChatWidget.config.apiUrl,
                         primaryColor: ChatWidget.config.primaryColor,
                         animations: ChatWidget.config.animations || {},
-                        design: ChatWidget.config.design || {}
+                        design: ChatWidget.config.design || {},
+                        visibility: ChatWidget.config.visibility || {},
+                        access: ChatWidget.config.access || {},
+                        user: ChatWidget.config.user || {},
+                        userInfo: ChatWidget.getCurrentUserInfo()
                     };
                 }
             });

@@ -65,7 +65,11 @@
         apiUrl: { type: String, default: '/api/widget' },
         primaryColor: { type: String, default: '#3B82F6' },
         animations: { type: Object, default: () => ({}) },
-        design: { type: Object, default: () => ({}) }
+        design: { type: Object, default: () => ({}) },
+        visibility: { type: Object, default: () => ({}) },
+        access: { type: Object, default: () => ({}) },
+        userConfig: { type: Object, default: () => ({}) },
+        userInfo: { type: Object, default: () => ({}) }
       },
 
       setup(props) {
@@ -92,10 +96,33 @@
           messageStyle: 'bubbles',
           ...props.design
         };
+
+        const accessConfig = {
+          allowGuestUsers: true,
+          allowLoggedUsers: true,
+          restrictedRoles: [],
+          requireAuth: false,
+          loginUrl: '/login',
+          readOnlyMode: false,
+          ...props.access
+        };
+
+        const userConfig = {
+          autoDetect: true,
+          sendToBackend: true,
+          csrfToken: null,
+          authHeader: null,
+          userInfoEndpoint: '/api/user/info',
+          customUserData: {},
+          ...props.userConfig
+        };
+
         const isOpen = ref(false);
         const messages = ref([]);
         const newMessage = ref('');
         const sending = ref(false);
+        const canSendMessages = ref(true);
+        const currentUser = ref(props.userInfo || {});
         const unreadCount = ref(0);
         const isTyping = ref(false);
         const messagesContainer = ref(null);
@@ -233,6 +260,8 @@
           isOpen.value = !isOpen.value;
           if (isOpen.value) {
             unreadCount.value = 0;
+            // Check user access permissions when opening chat
+            checkUserAccess();
             nextTick(() => {
               scrollToBottom();
               initializeSession();
@@ -290,7 +319,49 @@
           }
         };
 
+        // Check user access permissions
+        const checkUserAccess = () => {
+          // Check if ChatWidget SDK has access checking
+          if (window.ChatWidget && typeof window.ChatWidget.canUserSendMessages === 'function') {
+            canSendMessages.value = window.ChatWidget.canUserSendMessages();
+          } else {
+            // Fallback to local access configuration
+            canSendMessages.value = !accessConfig.readOnlyMode;
+          }
+        };
+
+        // Handle authentication requirement
+        const handleAuthRequired = () => {
+          if (accessConfig.requireAuth && accessConfig.loginUrl) {
+            // Redirect to login or show login modal
+            window.location.href = accessConfig.loginUrl;
+          }
+        };
+
+        // Update user information
+        const updateUser = (userInfo) => {
+          currentUser.value = { ...currentUser.value, ...userInfo };
+          // Recheck access permissions when user changes
+          checkUserAccess();
+        };
+
+        // Make updateUser available globally for SDK
+        if (!window.ChatWidgetComponent) {
+          window.ChatWidgetComponent = {};
+        }
+        window.ChatWidgetComponent.updateUser = updateUser;
+
         const sendMessage = async () => {
+          if (!canSendMessages.value) {
+            if (accessConfig.requireAuth) {
+              handleAuthRequired();
+              return;
+            } else {
+              console.warn('User does not have permission to send messages');
+              return;
+            }
+          }
+
           if (!newMessage.value.trim() || sending.value) return;
 
           const message = newMessage.value.trim();
@@ -334,16 +405,40 @@
           }
 
           try {
+            // Prepare secure payload with user information
+            const payload = {
+              api_key: props.apiKey,
+              session_id: sessionId.value,
+              message: message,
+              // Include user information if available
+              user_info: currentUser.value.isLoggedIn ? {
+                id: currentUser.value.id,
+                name: currentUser.value.name,
+                email: currentUser.value.email,
+                role: currentUser.value.role
+              } : null,
+              timestamp: Date.now(),
+              page_url: window.location.href
+            };
+
+            // Get secure headers from SDK
+            const headers = window.ChatWidget?.getSecureHeaders ?
+              window.ChatWidget.getSecureHeaders() :
+              {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              };
+
+            // Add CSRF token if available
+            if (currentUser.value.csrfToken) {
+              headers['X-CSRF-TOKEN'] = currentUser.value.csrfToken;
+            }
+
             const response = await fetch(`${props.apiUrl}/message`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                api_key: props.apiKey,
-                session_id: sessionId.value,
-                message: message
-              })
+              headers: headers,
+              credentials: 'same-origin', // Include session cookies
+              body: JSON.stringify(payload)
             });
 
             const data = await response.json();
@@ -442,14 +537,21 @@
           isTyping,
           messagesContainer,
           supportAgent,
+          canSendMessages,
+          currentUser,
           toggleChat,
           sendMessage,
           handleTyping,
           formatTime,
           handleScroll,
+          checkUserAccess,
+          handleAuthRequired,
+          updateUser,
           // Configuration objects
           animationConfig,
           designConfig,
+          accessConfig,
+          userConfig,
           // Style functions
           getBorderRadius,
           getBoxShadow,
@@ -587,7 +689,7 @@
             </div>
 
             <!-- Input Area -->
-            <div style="padding: 12px; background: white; border-top: 1px solid #E5E7EB;">
+            <div v-if="canSendMessages" style="padding: 12px; background: white; border-top: 1px solid #E5E7EB;">
               <form @submit.prevent="sendMessage" style="display: flex; align-items: center; gap: 8px;">
                 <input
                   v-model="newMessage"
@@ -617,6 +719,23 @@
                 </button>
               </form>
             </div>
+            
+            <!-- Restricted Access Message -->
+            <div v-else style="padding: 12px; background: #F9FAFB; border-top: 1px solid #E5E7EB; text-align: center;">
+              <p style="margin: 0; color: #6B7280; font-size: 14px;">
+                <template v-if="accessConfig.requireAuth">
+                  <span>Please </span>
+                  <button @click="handleAuthRequired" style="color: #3B82F6; background: none; border: none; cursor: pointer; text-decoration: underline;">login</button>
+                  <span> to send messages</span>
+                </template>
+                <template v-else-if="accessConfig.readOnlyMode">
+                  Chat is in read-only mode
+                </template>
+                <template v-else>
+                  You don't have permission to send messages
+                </template>
+              </p>
+            </div>
           </div>
         </div>
       `
@@ -635,6 +754,10 @@
           :primary-color="primaryColor" 
           :animations="animations"
           :design="design"
+          :visibility="visibility"
+          :access="access"
+          :user-config="userConfig"
+          :user-info="userInfo"
         />`,
         data() {
           return {
@@ -642,7 +765,11 @@
             apiUrl: window.ChatWidget?.config?.apiUrl || '/api/widget',
             primaryColor: window.ChatWidget?.config?.primaryColor || '#3B82F6',
             animations: window.ChatWidget?.config?.animations || {},
-            design: window.ChatWidget?.config?.design || {}
+            design: window.ChatWidget?.config?.design || {},
+            visibility: window.ChatWidget?.config?.visibility || {},
+            access: window.ChatWidget?.config?.access || {},
+            userConfig: window.ChatWidget?.config?.user || {},
+            userInfo: window.ChatWidget?.getCurrentUserInfo ? window.ChatWidget.getCurrentUserInfo() : {}
           };
         }
       });

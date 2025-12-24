@@ -4,6 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    @if (auth()->check())
+        <meta name="user-info"
+            content="{{ json_encode([
+                'id' => auth()->user()->id,
+                'name' => auth()->user()->name ?? auth()->user()->first_name . ' ' . auth()->user()->last_name,
+                'email' => auth()->user()->email,
+                'role' => auth()->user()->role?->value ?? 'user',
+                'isLoggedIn' => true,
+            ]) }}">
+    @endif
     <title>Chat Widget Demo</title>
     <style>
         body {
@@ -206,6 +217,24 @@
                         <label><input type="checkbox" id="fadeIn" checked> Fade In Effect</label><br><br>
                         <label><input type="checkbox" id="slideIn" checked> Slide In Effect</label><br><br>
                     </div>
+
+                    <div>
+                        <h5>Visibility Settings</h5>
+                        <label><input type="checkbox" id="widgetEnabled" checked> Show Widget</label><br><br>
+                        <label><input type="checkbox" id="hideForLoggedUsers"> Hide for Logged Users</label><br><br>
+                    </div>
+
+                    <div>
+                        <h5>Access Control Settings</h5>
+                        <label><input type="checkbox" id="allowGuestUsers" checked> Allow Guest Users</label><br><br>
+                        <label><input type="checkbox" id="allowLoggedUsers" checked> Allow Logged Users</label><br><br>
+                        <label><input type="checkbox" id="requireAuth"> Require Authentication</label><br><br>
+                        <label><input type="checkbox" id="readOnlyMode"> Read-Only Mode</label><br><br>
+                        <label>Login URL:
+                            <input type="text" id="loginUrl" value="/login"
+                                style="width: 100%; padding: 5px; margin-top: 5px;">
+                        </label><br><br>
+                    </div>
                 </div>
 
                 <button id="applyConfig"
@@ -239,7 +268,88 @@ ChatWidget.setUser({
 });</pre>
             </div>
 
-            <h3>📊 Features</h3>
+            <h3>� Visibility & Access Control</h3>
+            <p>Control who can see and interact with your chat widget:</p>
+            <div class="code-block">
+                <pre>ChatWidget.init({
+  apiKey: 'your-api-key',
+  
+  // Visibility Configuration
+  visibility: {
+    enabled: true,                    // Show/hide entire widget
+    hideForLoggedUsers: false,       // Hide widget when user is logged in
+    showOnlyForRoles: ['admin'],     // Show only for specific user roles
+    hideOnPages: ['/checkout/*'],     // Hide on specific page patterns  
+    showOnPages: []                  // Show only on specific pages (empty = all)
+  },
+  
+  // Access Control Configuration  
+  access: {
+    allowGuestUsers: true,           // Allow non-logged users to chat
+    allowLoggedUsers: true,          // Allow logged users to chat
+    restrictedRoles: ['banned'],     // Roles that cannot send messages
+    requireAuth: false,              // Require login to chat
+    loginUrl: '/login',              // Login redirect URL
+    readOnlyMode: false             // Only show messages, disable input
+  }
+});</pre>
+            </div>
+
+            <h4>🎯 Use Cases</h4>
+            <ul>
+                <li><strong>Guest Support:</strong> Set <code>requireAuth: false</code> to allow visitors to chat
+                    without logging in</li>
+                <li><strong>Member Only:</strong> Set <code>allowGuestUsers: false</code> to restrict chat to logged
+                    users only</li>
+                <li><strong>Read-Only Announcements:</strong> Use <code>readOnlyMode: true</code> for notifications</li>
+                <li><strong>Role-Based Access:</strong> Use <code>showOnlyForRoles</code> to show chat only to specific
+                    user types</li>
+                <li><strong>Page-Specific:</strong> Use <code>hideOnPages</code> to hide chat on checkout or sensitive
+                    pages</li>
+            </ul>
+            <h4>🧪 Test Configuration</h4>
+            <p>Use the configuration panel above to test different settings:</p>
+            <ol>
+                <li><strong>Hide Widget:</strong> Uncheck "Show Widget" - the widget will disappear completely</li>
+                <li><strong>Read-Only Mode:</strong> Check "Read-Only Mode" - input area will be replaced with a message
+                </li>
+                <li><strong>Require Auth:</strong> Check "Require Authentication" - shows login message for guests</li>
+                <li><strong>Guest/User Control:</strong> Toggle "Allow Guest Users" or "Allow Logged Users" to test
+                    access</li>
+            </ol>
+            <h3>🔐 User Authentication & Security</h3>
+            <p>The widget automatically detects and securely transmits user information:</p>
+            <div class="code-block">
+                <pre>ChatWidget.init({
+  apiKey: 'your-api-key',
+  
+  // User Configuration
+  user: {
+    autoDetect: true,              // Auto-detect logged users
+    sendToBackend: true,           // Send user info to backend
+    userInfoEndpoint: '/api/user/info',  // User info API endpoint
+    csrfToken: 'auto',             // CSRF token (auto-detected)
+    customUserData: {}             // Additional user data
+  }
+});
+
+// Manual user setting
+ChatWidget.setUser({
+  name: 'John Doe',
+  email: 'john@example.com',
+  role: 'admin'
+});</pre>
+            </div>
+
+            <h4>🛡️ Security Features</h4>
+            <ul>
+                <li><strong>CSRF Protection:</strong> Automatically includes CSRF tokens in requests</li>
+                <li><strong>Session Cookies:</strong> Includes authentication cookies securely</li>
+                <li><strong>User Role Detection:</strong> Integrates with Laravel's user roles</li>
+                <li><strong>Secure Headers:</strong> Adds proper authentication headers</li>
+                <li><strong>Data Sanitization:</strong> Filters sensitive data before transmission</li>
+            </ul>
+            <h3>�📊 Features</h3>
             <ul>
                 <li>✅ Real-time messaging</li>
                 <li>✅ Typing indicators</li>
@@ -249,6 +359,15 @@ ChatWidget.setUser({
                 <li>✅ Session management</li>
                 <li>✅ WebSocket support</li>
                 <li>✅ Easy integration</li>
+                <li>✅ <strong>Visibility Control</strong> - Show/hide widget conditionally</li>
+                <li>✅ <strong>Access Control</strong> - Control who can send messages</li>
+                <li>✅ <strong>Guest/User Support</strong> - Allow or restrict based on login status</li>
+                <li>✅ <strong>Read-Only Mode</strong> - Display-only chat for announcements</li>
+                <li>✅ <strong>Page-Specific Control</strong> - Show/hide on specific pages</li>
+                <li>✅ <strong>Role-Based Access</strong> - Control access by user roles</li>
+                <li>✅ <strong>User Authentication</strong> - Auto-detect and secure user info</li>
+                <li>✅ <strong>CSRF Protection</strong> - Built-in security against attacks</li>
+                <li>✅ <strong>Secure Data Transmission</strong> - Encrypted user information</li>
             </ul>
         </div>
 
@@ -306,6 +425,29 @@ ChatWidget.setUser({
                 fontSize: "normal",
                 avatarStyle: "circle",
                 messageStyle: "bubbles"
+            },
+            visibility: {
+                enabled: true,
+                hideForLoggedUsers: false,
+                showOnlyForRoles: [],
+                hideOnPages: [],
+                showOnPages: []
+            },
+            access: {
+                allowGuestUsers: true,
+                allowLoggedUsers: true,
+                restrictedRoles: [],
+                requireAuth: false,
+                loginUrl: "/login",
+                readOnlyMode: false
+            },
+            user: {
+                autoDetect: true,
+                sendToBackend: true,
+                csrfToken: null,
+                authHeader: null,
+                userInfoEndpoint: "/api/user/info",
+                customUserData: {}
             }
         };
 
@@ -334,6 +476,21 @@ ChatWidget.setUser({
                     fontSize: "normal",
                     avatarStyle: "circle",
                     messageStyle: document.getElementById('messageStyle').value
+                },
+                visibility: {
+                    enabled: document.getElementById('widgetEnabled').checked,
+                    hideForLoggedUsers: document.getElementById('hideForLoggedUsers').checked,
+                    showOnlyForRoles: [],
+                    hideOnPages: [],
+                    showOnPages: []
+                },
+                access: {
+                    allowGuestUsers: document.getElementById('allowGuestUsers').checked,
+                    allowLoggedUsers: document.getElementById('allowLoggedUsers').checked,
+                    restrictedRoles: [],
+                    requireAuth: document.getElementById('requireAuth').checked,
+                    loginUrl: document.getElementById('loginUrl').value,
+                    readOnlyMode: document.getElementById('readOnlyMode').checked
                 }
             };
 
@@ -365,6 +522,17 @@ ChatWidget.setUser({
             document.getElementById('bounceIntensity').value = "normal";
             document.getElementById('fadeIn').checked = true;
             document.getElementById('slideIn').checked = true;
+
+            // Reset visibility settings
+            document.getElementById('widgetEnabled').checked = true;
+            document.getElementById('hideForLoggedUsers').checked = false;
+
+            // Reset access control settings  
+            document.getElementById('allowGuestUsers').checked = true;
+            document.getElementById('allowLoggedUsers').checked = true;
+            document.getElementById('requireAuth').checked = false;
+            document.getElementById('readOnlyMode').checked = false;
+            document.getElementById('loginUrl').value = "/login";
 
             updateConfig();
         }
