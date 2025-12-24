@@ -775,7 +775,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import { router, usePage } from "@inertiajs/vue3";
 import axios from "axios";
 
@@ -801,6 +801,7 @@ const chatList = ref([...props.chats]); // Local reactive copy of chats
 const showScrollToBottom = ref(false); // Show scroll to bottom button
 const onlineUsers = ref(new Set()); // Track online users
 const userStatuses = ref({}); // Track detailed user statuses
+const activeChannel = ref(null); // Track current active channel for cleanup
 
 // Computed
 const page = usePage();
@@ -827,6 +828,8 @@ const loadChatMessages = async (chat) => {
 
 // Select chat
 const selectChat = async (chat) => {
+  // Clean up only the previous active channel (preserve global listeners)
+  cleanupActiveChannel();
   selectedChat.value = chat;
   await loadChatMessages(chat);
 
@@ -844,7 +847,8 @@ const selectChat = async (chat) => {
     console.error("❌ Error marking messages as read:", error);
   }
 
-  setupEcho(); // Setup real-time messaging
+  // Setup real-time messaging for the new chat
+  setupEcho();
 };
 
 // Send message
@@ -980,6 +984,9 @@ const startChat = async (user) => {
     if (existingChatIndex === -1) {
       // Add new chat to beginning of list
       chatList.value.unshift(newChat);
+
+      // Subscribe to the new chat for real-time updates
+      subscribeToSingleChat(newChat);
     }
 
     // Select the chat immediately
@@ -1133,17 +1140,32 @@ const setupEcho = () => {
 
   const channelName = `chat.${selectedChat.value.id}`;
 
-  // Leave any previous channels
+  // Clean up previous active channel
+  if (activeChannel.value && activeChannel.value !== channelName) {
+    console.log(`🧹 Leaving previous channel: ${activeChannel.value}`);
+    window.Echo.leave(activeChannel.value);
+  }
+
+  // Leave current channel if exists (for safety)
   window.Echo.leave(channelName);
 
-  // Create channel and add debugging
-  console.log("📡 Creating private channel listener...");
+  console.log(`📡 Setting up channel for chat: ${selectedChat.value.id}`);
 
   const channel = window.Echo.private(channelName);
+  activeChannel.value = channelName; // Track the active channel
 
   // Listen specifically to message.sent
   channel
     .listen(".message.sent", function (eventData) {
+      // Only process messages if this is still the active chat
+      if (
+        !selectedChat.value ||
+        activeChannel.value !== `chat.${selectedChat.value.id}`
+      ) {
+        console.log("⚠️ Ignoring message for inactive chat");
+        return;
+      }
+
       let messageData;
 
       try {
@@ -1164,7 +1186,11 @@ const setupEcho = () => {
       }
 
       // Validate and add message
-      if (messageData && messageData.id) {
+      if (
+        messageData &&
+        messageData.id &&
+        messageData.chat_id === selectedChat.value.id
+      ) {
         // Check if message already exists
         const exists = currentChatMessages.value.some((msg) => msg.id === messageData.id);
         if (!exists) {
@@ -1178,9 +1204,9 @@ const setupEcho = () => {
           console.log("🔄 Message already exists, skipping");
         }
         // Update chat list
-        updateChatInList(selectedChat.value.id, messageData);
+        updateChatInList(messageData.chat_id, messageData);
       } else {
-        console.error("❌ Invalid message data:", messageData);
+        console.error("❌ Invalid message data or wrong chat:", messageData);
       }
     })
     .listen(".message.read", function (eventData) {
@@ -1217,23 +1243,57 @@ const setupEcho = () => {
     });
 };
 
-// Setup global Echo listeners for visible chats only (lazy-load approach)
+// Cleanup only the active Echo channel (preserve global listeners)
+const cleanupActiveChannel = () => {
+  if (!window.Echo) return;
+
+  // Leave only the active channel
+  if (activeChannel.value) {
+    console.log(`🧹 Cleaning up active channel: ${activeChannel.value}`);
+    window.Echo.leave(activeChannel.value);
+    activeChannel.value = null;
+  }
+};
+
+// Cleanup all Echo channels (use only on unmount)
+const cleanupAllChannels = () => {
+  if (!window.Echo) return;
+
+  // Leave active channel
+  if (activeChannel.value) {
+    console.log(`🧹 Cleaning up active channel: ${activeChannel.value}`);
+    window.Echo.leave(activeChannel.value);
+    activeChannel.value = null;
+  }
+
+  // Leave all global channels (cleanup any leaked channels)
+  if (window.Echo.connector && window.Echo.connector.channels) {
+    Object.keys(window.Echo.connector.channels).forEach((channelName) => {
+      if (channelName.startsWith("private-chat.")) {
+        console.log(`🧹 Cleaning up leaked channel: ${channelName}`);
+        window.Echo.leave(channelName.replace("private-", ""));
+      }
+    });
+  }
+};
+
+// Setup global Echo listeners for chat notifications
 const setupGlobalEcho = () => {
-  console.log("🌍 setupGlobalEcho called - limiting to visible chats");
+  console.log("🌍 setupGlobalEcho called - setting up background listeners");
 
   if (!window.Echo) {
     console.error("❌ Echo not available for global setup");
     return;
   }
 
-  // Only subscribe to the first 10 visible chats to prevent excessive channel connections
-  const visibleChats = chatList.value.slice(0, 10);
+  // Subscribe to more chats for background notifications (limit to 25 to balance performance)
+  const visibleChats = chatList.value.slice(0, 25);
 
   visibleChats.forEach((chat) => {
     const channelName = `chat.${chat.id}`;
 
     // Check if already subscribed to avoid duplicate subscriptions
-    if (!window.Echo.connector.channels[channelName]) {
+    if (!window.Echo.connector.channels[`private-${channelName}`]) {
       window.Echo.private(channelName)
         .listen(".message.sent", function (eventData) {
           // Extract message data
@@ -1243,10 +1303,12 @@ const setupGlobalEcho = () => {
           }
 
           if (messageData && messageData.id) {
-            // Update chat in list
+            console.log(`📩 Background message received for chat ${chat.id}`);
+
+            // Update chat in list (for unread count and last message)
             updateChatInList(chat.id, messageData);
 
-            // If this is the currently selected chat, add to messages
+            // Only add to current messages if this is the currently selected chat
             if (selectedChat.value && selectedChat.value.id === chat.id) {
               const exists = currentChatMessages.value.some(
                 (msg) => msg.id === messageData.id
@@ -1260,13 +1322,64 @@ const setupGlobalEcho = () => {
           }
         })
         .subscribed(() => {
-          console.log(`✅ Subscribed to ${channelName}`);
+          console.log(`✅ Background subscription active for chat ${chat.id}`);
         })
         .error((error) => {
-          console.error(`❌ Subscription error for ${channelName}:`, error);
+          console.error(`❌ Background subscription error for chat ${chat.id}:`, error);
         });
+    } else {
+      console.log(`ℹ️ Already subscribed to chat ${chat.id}`);
     }
   });
+};
+
+// Subscribe to a single chat for background notifications
+const subscribeToSingleChat = (chat) => {
+  if (!window.Echo) {
+    console.warn("⚠️ Echo not available for single chat subscription");
+    return;
+  }
+
+  const channelName = `chat.${chat.id}`;
+
+  // Check if already subscribed
+  if (window.Echo.connector.channels[`private-${channelName}`]) {
+    console.log(`ℹ️ Already subscribed to chat ${chat.id}`);
+    return;
+  }
+
+  window.Echo.private(channelName)
+    .listen(".message.sent", function (eventData) {
+      let messageData = eventData;
+      if (eventData && eventData.message) {
+        messageData = eventData.message;
+      }
+
+      if (messageData && messageData.id) {
+        console.log(`📩 Background message received for new chat ${chat.id}`);
+
+        // Update chat in list
+        updateChatInList(chat.id, messageData);
+
+        // Only add to current messages if this is the currently selected chat
+        if (selectedChat.value && selectedChat.value.id === chat.id) {
+          const exists = currentChatMessages.value.some(
+            (msg) => msg.id === messageData.id
+          );
+          if (!exists) {
+            currentChatMessages.value.push(messageData);
+            console.log("🆕 Message added to current chat from new subscription");
+            nextTick(() => scrollToBottom());
+          }
+        }
+      }
+    })
+    .subscribed(() => {
+      console.log(`✅ Background subscription active for new chat ${chat.id}`);
+    })
+    .error((error) => {
+      console.error(`❌ Background subscription error for new chat ${chat.id}:`, error);
+    });
 };
 
 // Online status functions
@@ -1461,6 +1574,11 @@ onMounted(() => {
     // Poll for new messages every 5 seconds as fallback
     setInterval(pollForNewMessages, 5000);
   }
+});
+
+// Cleanup on component unmount
+onUnmounted(() => {
+  cleanupAllChannels();
 });
 
 // Watch for chat selection changes
