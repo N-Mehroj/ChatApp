@@ -122,8 +122,100 @@
   "apiUrl": "/api/widget - API endpoint",
   "position": "bottom-right | bottom-left | top-right | top-left",
   "primaryColor": "#3B82F6 - widget theme color",
-  "debug": false - enable debug logging
+  "debug": false - enable debug logging,
+  
+  // Animation Configuration
+  "animations": {
+    "enabled": true,
+    "openSpeed": 300,
+    "bounceIntensity": "normal", // none, subtle, normal, strong
+    "typingAnimation": true,
+    "fadeIn": true,
+    "slideIn": true
+  },
+  
+  // Design Configuration  
+  "design": {
+    "theme": "modern", // modern, classic, minimal, rounded
+    "borderRadius": "normal", // none, small, normal, large, round
+    "shadow": "normal", // none, subtle, normal, strong
+    "buttonStyle": "floating", // floating, fixed, minimal
+    "chatWidth": 320,
+    "chatHeight": 500,
+    "fontSize": "normal", // small, normal, large
+    "avatarStyle": "circle", // circle, square, none
+    "messageStyle": "bubbles" // bubbles, flat, outlined
+  }
 }</pre>
+            </div>
+
+            <!-- Live Configuration Panel -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h4>🎨 Live Configuration Demo</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <div>
+                        <h5>Colors & Position</h5>
+                        <label>Primary Color: <input type="color" id="primaryColor" value="#3B82F6"></label><br><br>
+                        <label>Position:
+                            <select id="position">
+                                <option value="bottom-right">Bottom Right</option>
+                                <option value="bottom-left">Bottom Left</option>
+                                <option value="top-right">Top Right</option>
+                                <option value="top-left">Top Left</option>
+                            </select>
+                        </label><br><br>
+                    </div>
+
+                    <div>
+                        <h5>Design Options</h5>
+                        <label>Theme:
+                            <select id="theme">
+                                <option value="modern">Modern</option>
+                                <option value="classic">Classic</option>
+                                <option value="minimal">Minimal</option>
+                                <option value="rounded">Rounded</option>
+                            </select>
+                        </label><br><br>
+                        <label>Button Style:
+                            <select id="buttonStyle">
+                                <option value="floating">Floating</option>
+                                <option value="fixed">Fixed</option>
+                                <option value="minimal">Minimal</option>
+                            </select>
+                        </label><br><br>
+                        <label>Message Style:
+                            <select id="messageStyle">
+                                <option value="bubbles">Bubbles</option>
+                                <option value="flat">Flat</option>
+                                <option value="outlined">Outlined</option>
+                            </select>
+                        </label><br><br>
+                    </div>
+
+                    <div>
+                        <h5>Animation Settings</h5>
+                        <label><input type="checkbox" id="animations" checked> Enable Animations</label><br><br>
+                        <label>Bounce Intensity:
+                            <select id="bounceIntensity">
+                                <option value="none">None</option>
+                                <option value="subtle">Subtle</option>
+                                <option value="normal" selected>Normal</option>
+                                <option value="strong">Strong</option>
+                            </select>
+                        </label><br><br>
+                        <label><input type="checkbox" id="fadeIn" checked> Fade In Effect</label><br><br>
+                        <label><input type="checkbox" id="slideIn" checked> Slide In Effect</label><br><br>
+                    </div>
+                </div>
+
+                <button id="applyConfig"
+                    style="background: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-top: 15px;">
+                    🔄 Apply Configuration
+                </button>
+                <button id="resetConfig"
+                    style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+                    ↻ Reset to Default
+                </button>
             </div>
 
             <h3>🚀 Step 4: Advanced Usage</h3>
@@ -195,8 +287,93 @@ ChatWidget.setUser({
             apiKey: "demo_widget_key_12345",
             primaryColor: "#3B82F6",
             position: "bottom-right",
-            debug: true
+            debug: true,
+            animations: {
+                enabled: true,
+                openSpeed: 300,
+                bounceIntensity: "normal",
+                typingAnimation: true,
+                fadeIn: true,
+                slideIn: true
+            },
+            design: {
+                theme: "modern",
+                borderRadius: "normal",
+                shadow: "normal",
+                buttonStyle: "floating",
+                chatWidth: 320,
+                chatHeight: 500,
+                fontSize: "normal",
+                avatarStyle: "circle",
+                messageStyle: "bubbles"
+            }
         };
+
+        // Configuration control functions
+        function updateConfig() {
+            const config = {
+                apiKey: "demo_widget_key_12345",
+                primaryColor: document.getElementById('primaryColor').value,
+                position: document.getElementById('position').value,
+                debug: true,
+                animations: {
+                    enabled: document.getElementById('animations').checked,
+                    openSpeed: 300,
+                    bounceIntensity: document.getElementById('bounceIntensity').value,
+                    typingAnimation: true,
+                    fadeIn: document.getElementById('fadeIn').checked,
+                    slideIn: document.getElementById('slideIn').checked
+                },
+                design: {
+                    theme: document.getElementById('theme').value,
+                    borderRadius: "normal",
+                    shadow: "normal",
+                    buttonStyle: document.getElementById('buttonStyle').value,
+                    chatWidth: 320,
+                    chatHeight: 500,
+                    fontSize: "normal",
+                    avatarStyle: "circle",
+                    messageStyle: document.getElementById('messageStyle').value
+                }
+            };
+
+            // Update global config
+            window.chatWidgetConfig = config;
+
+            // Reinitialize widget if it exists
+            if (window.ChatWidget && window.ChatWidget.init) {
+                // Remove existing widget
+                const container = document.getElementById('chat-widget-container');
+                if (container) {
+                    container.remove();
+                }
+
+                // Reinitialize with new config
+                setTimeout(() => {
+                    window.ChatWidget.init(config);
+                }, 100);
+            }
+        }
+
+        function resetConfig() {
+            document.getElementById('primaryColor').value = "#3B82F6";
+            document.getElementById('position').value = "bottom-right";
+            document.getElementById('theme').value = "modern";
+            document.getElementById('buttonStyle').value = "floating";
+            document.getElementById('messageStyle').value = "bubbles";
+            document.getElementById('animations').checked = true;
+            document.getElementById('bounceIntensity').value = "normal";
+            document.getElementById('fadeIn').checked = true;
+            document.getElementById('slideIn').checked = true;
+
+            updateConfig();
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('applyConfig').addEventListener('click', updateConfig);
+            document.getElementById('resetConfig').addEventListener('click', resetConfig);
+        });
 
         // Load widget for demo
         window.chatWidgetQueue = window.chatWidgetQueue || [];

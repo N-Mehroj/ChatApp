@@ -9,7 +9,28 @@
             widgetUrl: '/widget',
             position: 'bottom-right',
             primaryColor: '#3B82F6',
-            debug: false
+            debug: false,
+            // Animation configurations
+            animations: {
+                enabled: true,
+                openSpeed: 300,
+                bounceIntensity: 'normal', // 'none', 'subtle', 'normal', 'strong'
+                typingAnimation: true,
+                fadeIn: true,
+                slideIn: true
+            },
+            // Design configurations
+            design: {
+                theme: 'modern', // 'modern', 'classic', 'minimal', 'rounded'
+                borderRadius: 'normal', // 'none', 'small', 'normal', 'large', 'round'
+                shadow: 'normal', // 'none', 'subtle', 'normal', 'strong'
+                buttonStyle: 'floating', // 'floating', 'fixed', 'minimal'
+                chatWidth: 320,
+                chatHeight: 500,
+                fontSize: 'normal', // 'small', 'normal', 'large'
+                avatarStyle: 'circle', // 'circle', 'square', 'none'
+                messageStyle: 'bubbles' // 'bubbles', 'flat', 'outlined'
+            }
         },
 
         // Initialize the widget
@@ -36,26 +57,44 @@
 
         // Get absolute URL for assets
         getAssetUrl: function (path) {
-            // If running locally from file://, use relative path
+            // Normalize path by removing leading slashes
+            const normalizedPath = path.replace(/^\/+/, '');
+
+            // If running locally from file://, use relative path from the widget directory
             if (window.location.protocol === 'file:') {
-                // For file:// protocol, use relative paths from current SDK location
-                return './' + path;
+                // Try to get the SDK script's location
+                const scripts = document.getElementsByTagName('script');
+                let sdkPath = '';
+                for (let script of scripts) {
+                    if (script.src && script.src.includes('sdk.js')) {
+                        // Get the directory of the SDK script
+                        sdkPath = script.src.substring(0, script.src.lastIndexOf('/') + 1);
+                        break;
+                    }
+                }
+
+                if (sdkPath) {
+                    return sdkPath + normalizedPath;
+                }
+
+                // Fallback to relative path
+                return normalizedPath;
             }
 
             // For web servers, use configured widget URL
             if (this.config.widgetUrl.startsWith('http')) {
-                return this.config.widgetUrl + '/' + path;
+                return this.config.widgetUrl + '/' + normalizedPath;
             }
 
             // Relative path for same-origin
-            return this.config.widgetUrl + '/' + path;
+            return this.config.widgetUrl + '/' + normalizedPath;
         },
 
         // Load widget styles
         loadCSS: function () {
             const link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.href = this.getAssetUrl('assets/widget.css');
+            link.href = this.getAssetUrl('/assets/widget.css');
             link.onerror = () => {
                 this.log('Failed to load CSS, using inline styles...');
                 this.addInlineStyles();
@@ -185,7 +224,7 @@
         // Load Vue application
         loadVueApp: function () {
             const script = document.createElement('script');
-            script.src = this.getAssetUrl('assets/widget.js');
+            script.src = this.getAssetUrl('/assets/widget.js');
             this.log('Loading JS from: ' + script.src);
             script.onload = () => {
                 this.log('Vue app loaded');
@@ -243,46 +282,54 @@
 
         // Mount the widget
         mountWidget: function () {
-            if (typeof Vue === 'undefined') {
-                console.error('ChatWidget: Vue is not loaded');
-                return;
-            }
-
-            const container = document.getElementById('chat-widget-container');
-            if (!container) {
-                console.error('ChatWidget: Container not found');
-                return;
-            }
-
-            // Enable pointer events on the widget
-            container.style.pointerEvents = 'auto';
-
-            // Create Vue app instance
-            const { createApp } = Vue;
-            const app = createApp({
-                template: `
-          <ChatWidget 
-            :api-key="apiKey" 
-            :api-url="apiUrl"
-            :primary-color="primaryColor"
-          />
-        `,
-                data() {
-                    return {
-                        apiKey: ChatWidget.config.apiKey,
-                        apiUrl: ChatWidget.config.apiUrl,
-                        primaryColor: ChatWidget.config.primaryColor
-                    };
+            // Wait a bit for the widget.js to fully initialize
+            setTimeout(() => {
+                if (typeof Vue === 'undefined') {
+                    console.error('ChatWidget: Vue is not loaded');
+                    return;
                 }
-            });
 
-            // Register the ChatWidget component
-            if (window.ChatWidgetComponent) {
-                app.component('ChatWidget', window.ChatWidgetComponent);
-            }
+                const container = document.getElementById('chat-widget-container');
+                if (!container) {
+                    console.error('ChatWidget: Container not found');
+                    return;
+                }
 
-            app.mount('#chat-widget-container');
-            this.log('Widget mounted successfully');
+                // Enable pointer events on the widget
+                container.style.pointerEvents = 'auto';
+
+                // Create Vue app instance
+                const { createApp } = Vue;
+                const app = createApp({
+                    template: `
+              <ChatWidget 
+                :api-key="apiKey" 
+                :api-url="apiUrl"
+                :primary-color="primaryColor"
+                :animations="animations"
+                :design="design"
+              />
+            `,
+                    data() {
+                        return {
+                            apiKey: ChatWidget.config.apiKey,
+                            apiUrl: ChatWidget.config.apiUrl,
+                            primaryColor: ChatWidget.config.primaryColor,
+                            animations: ChatWidget.config.animations || {},
+                            design: ChatWidget.config.design || {}
+                        };
+                    }
+                });
+
+                // Register the ChatWidget component
+                if (window.ChatWidgetComponent) {
+                    app.component('ChatWidget', window.ChatWidgetComponent);
+                    app.mount('#chat-widget-container');
+                    this.log('Widget mounted successfully');
+                } else {
+                    console.error('ChatWidget: Component not found');
+                }
+            }, 200);
         },
 
         // Send message in fallback mode

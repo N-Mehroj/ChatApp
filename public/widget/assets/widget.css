@@ -130,3 +130,100 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Additional Animations */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+/* Theme Styles */
+.chat-widget.theme-classic {
+  font-family: Georgia, serif;
+}
+
+.chat-widget.theme-minimal {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+.chat-widget.theme-rounded .chat-button {
+  border-radius: 24px !important;
+}
+
+.chat-widget.theme-rounded .chat-modal {
+  border-radius: 20px !important;
+}
+
+/* Button Hover Effects */
+.chat-widget .chat-button:hover {
+  animation: pulse 0.6s ease-in-out;
+}
+
+.chat-widget .chat-button.wiggle:hover {
+  animation: wiggle 0.5s ease-in-out;
+}
+
+/* Message Animations */
+.chat-widget .message-appear {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.chat-widget .typing-dots div {
+  animation-delay: 0s, 0.1s, 0.2s;
+}
+
+/* Responsive Design Improvements */
+@media (max-width: 480px) {
+  .chat-widget .chat-modal {
+    width: calc(100vw - 20px) !important;
+    height: calc(100vh - 100px) !important;
+    bottom: 10px !important;
+    right: 10px !important;
+    left: 10px !important;
+  }
+  
+  .chat-widget .chat-button {
+    bottom: 15px !important;
+    right: 15px !important;
+    width: 56px !important;
+    height: 56px !important;
+  }
+}
