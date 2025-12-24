@@ -99,6 +99,13 @@
                 {{ getChatDisplayName(chat) }}
               </h3>
               <div class="flex items-center ml-2">
+                <!-- Unread Message Count Badge -->
+                <span
+                  v-if="chat.unread_count && chat.unread_count > 0"
+                  class="bg-red-500 text-white text-xs font-medium px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center mr-2"
+                >
+                  {{ chat.unread_count > 9 ? "9+" : chat.unread_count }}
+                </span>
                 <!-- Online Status Indicator -->
                 <div
                   v-if="isUserOnline(getOtherUserId(chat))"
@@ -823,6 +830,12 @@ const selectChat = async (chat) => {
   selectedChat.value = chat;
   await loadChatMessages(chat);
 
+  // Clear unread count for the selected chat
+  const chatIndex = chatList.value.findIndex((c) => c.id === chat.id);
+  if (chatIndex !== -1) {
+    chatList.value[chatIndex].unread_count = 0;
+  }
+
   // Mark messages as read
   try {
     await axios.post(`/chat/${chat.id}/mark-read`);
@@ -998,6 +1011,14 @@ const updateChatInList = (chatId, message) => {
       updated_at: message.created_at,
       is_new: message.user_id !== props.user.id, // Only mark as new if from another user
     };
+
+    // Update unread count if message is from another user and not currently viewing this chat
+    if (
+      message.user_id !== props.user.id &&
+      (!selectedChat.value || selectedChat.value.id !== chatId)
+    ) {
+      updatedChat.unread_count = (updatedChat.unread_count || 0) + 1;
+    }
 
     // Remove from current position and add to top
     chatList.value.splice(chatIndex, 1);

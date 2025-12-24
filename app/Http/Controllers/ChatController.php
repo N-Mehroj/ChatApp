@@ -39,6 +39,11 @@ class ChatController extends Controller
 
         $chats = $chatsQuery->get();
 
+        // Add unread count for each chat
+        $chats->each(function ($chat) use ($user) {
+            $chat->unread_count = $chat->getUnreadCount($user);
+        });
+
         return Inertia::render('Chat/Index', [
             'chats' => $chats,
             'user' => $user,

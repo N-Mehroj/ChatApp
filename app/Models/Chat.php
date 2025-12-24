@@ -16,7 +16,6 @@ use Illuminate\Support\Carbon;
  * @property bool $is_new
  * @property Carbon $created_at
  * @property Carbon $updated_at
- *
  * @property User $user
  * @property User|null $recipient
  * @property ChatMessage $lastMessage
@@ -77,5 +76,16 @@ class Chat extends Model
     public function isParticipant(User $user): bool
     {
         return $this->user_id === $user->id || $this->recipient_id === $user->id;
+    }
+
+    /**
+     * Get unread messages count for a specific user
+     */
+    public function getUnreadCount(User $user): int
+    {
+        return $this->messages()
+            ->where('user_id', '!=', $user->id) // Messages not from the user
+            ->whereNull('read_at') // Not read yet
+            ->count();
     }
 }
