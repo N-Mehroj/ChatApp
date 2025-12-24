@@ -8,11 +8,18 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 });
 
 Broadcast::channel('chat.{chatId}', function ($user, $chatId) {
+
     $chat = Chat::find($chatId);
 
-    if (!$chat) {
+    if (! $chat) {
         return false;
     }
+
+    // Allow support role to access all chats
+    if ($user->isSupport()) {
+        return true;
+    }
+
     return $chat->isParticipant($user) ||
         $chat->messages()->where('user_id', $user->id)->exists();
 });
@@ -24,5 +31,8 @@ Broadcast::channel('user-status.{userId}', function () {
 
 // Private channel for user's chat list updates
 Broadcast::channel('user.chats.{userId}', function ($user, $userId) {
+    if ($user->isSupport()) {
+        return true;
+    }
     return (int) $user->id === (int) $userId;
 });

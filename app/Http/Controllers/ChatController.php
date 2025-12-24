@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Events\MessageSent;
-use App\Events\MessageRead;
-use App\Events\UserOnlineStatus;
 use App\Events\ChatCreated;
 use App\Events\ChatUpdated;
+use App\Events\MessageRead;
+use App\Events\MessageSent;
+use App\Events\UserOnlineStatus;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\User;
@@ -22,18 +22,22 @@ class ChatController extends Controller
     public function index(): Response
     {
         $user = Auth::user();
-
+        // return  $user;
         $chats = Chat::with(['user', 'lastMessage'])
-            ->where('user_id', $user->id)
-            ->orWhereHas('messages', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
+            ->when($user->role == 'support', function ($query) use ($user) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                        ->orWhereHas('messages', function ($mq) use ($user) {
+                            $mq->where('user_id', $user->id);
+                        });
+                });
             })
             ->latest('updated_at')
             ->get();
 
         return Inertia::render('Chat/Index', [
             'chats' => $chats,
-            'user' => $user
+            'user' => $user,
         ]);
     }
 
@@ -41,7 +45,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$this->userCanAccessChat($user, $chat)) {
+        if (! $this->userCanAccessChat($user, $chat)) {
             abort(403);
         }
 
@@ -58,7 +62,7 @@ class ChatController extends Controller
             'chat' => $chat->load(['user', 'lastMessage']),
             'messages' => $messages,
             'currentUser' => $user,
-            'users' => $users
+            'users' => $users,
         ]);
     }
 
@@ -83,11 +87,11 @@ class ChatController extends Controller
                 ->where('recipient_id', $user->id);
         })->first();
 
-        if (!$chat) {
+        if (! $chat) {
             $chat = Chat::create([
                 'user_id' => $user->id,
                 'recipient_id' => $recipientId,
-                'is_new' => true
+                'is_new' => true,
             ]);
 
             // Broadcast chat creation to both participants
@@ -95,12 +99,12 @@ class ChatController extends Controller
             Log::info('ChatCreated event broadcasted', [
                 'chat_id' => $chat->id,
                 'user_id' => $user->id,
-                'recipient_id' => $recipientId
+                'recipient_id' => $recipientId,
             ]);
         }
 
         return response()->json([
-            'chat' => $chat->load(['user', 'recipient', 'lastMessage'])
+            'chat' => $chat->load(['user', 'recipient', 'lastMessage']),
         ]);
     }
 
@@ -135,17 +139,17 @@ class ChatController extends Controller
             'chat_id' => $chat->id,
             'message_id' => $message->id,
             'channel' => 'chat.' . $chat->id,
-            'user_id' => $user->id
+            'user_id' => $user->id,
         ]);
 
         Log::info('ChatUpdated event broadcasted', [
             'chat_id' => $chat->id,
             'message_id' => $message->id,
-            'last_message' => $request->message
+            'last_message' => $request->message,
         ]);
 
         return response()->json([
-            'message' => $message->load('user')
+            'message' => $message->load('user'),
         ]);
     }
 
@@ -153,7 +157,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$this->userCanAccessChat($user, $chat)) {
+        if (! $this->userCanAccessChat($user, $chat)) {
             abort(403);
         }
 
@@ -169,11 +173,11 @@ class ChatController extends Controller
             ->pluck('id')
             ->toArray();
 
-        if (!empty($unreadMessages)) {
+        if (! empty($unreadMessages)) {
             ChatMessage::whereIn('id', $unreadMessages)
                 ->update([
                     'read_at' => now(),
-                    'read_by' => $user->id
+                    'read_by' => $user->id,
                 ]);
 
             // Broadcast message read event
@@ -182,12 +186,12 @@ class ChatController extends Controller
             Log::info('MessageRead event broadcasted (getMessages)', [
                 'chat_id' => $chat->id,
                 'reader_id' => $user->id,
-                'message_count' => count($unreadMessages)
+                'message_count' => count($unreadMessages),
             ]);
         }
 
         return response()->json([
-            'messages' => $messages
+            'messages' => $messages,
         ]);
     }
 
@@ -204,7 +208,7 @@ class ChatController extends Controller
             ->get();
 
         return response()->json([
-            'chats' => $chats
+            'chats' => $chats,
         ]);
     }
 
@@ -233,7 +237,7 @@ class ChatController extends Controller
         }
 
         return response()->json([
-            'users' => $users
+            'users' => $users,
         ]);
     }
 
@@ -241,7 +245,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$this->userCanAccessChat($user, $chat)) {
+        if (! $this->userCanAccessChat($user, $chat)) {
             abort(403);
         }
 
@@ -252,11 +256,11 @@ class ChatController extends Controller
             ->pluck('id')
             ->toArray();
 
-        if (!empty($unreadMessages)) {
+        if (! empty($unreadMessages)) {
             ChatMessage::whereIn('id', $unreadMessages)
                 ->update([
                     'read_at' => now(),
-                    'read_by' => $user->id
+                    'read_by' => $user->id,
                 ]);
 
             // Broadcast message read event
@@ -265,12 +269,12 @@ class ChatController extends Controller
             Log::info('MessageRead event broadcasted (markAsRead)', [
                 'chat_id' => $chat->id,
                 'reader_id' => $user->id,
-                'message_count' => count($unreadMessages)
+                'message_count' => count($unreadMessages),
             ]);
         }
 
         return response()->json([
-            'success' => true
+            'success' => true,
         ]);
     }
 
@@ -288,7 +292,7 @@ class ChatController extends Controller
 
         return response()->json([
             'success' => true,
-            'status' => 'online'
+            'status' => 'online',
         ]);
     }
 
@@ -303,13 +307,13 @@ class ChatController extends Controller
 
         return response()->json([
             'success' => true,
-            'status' => 'offline'
+            'status' => 'offline',
         ]);
     }
 
     private function userCanAccessChat(User $user, Chat $chat): bool
     {
-        return $chat->isParticipant($user) ||
+        return $chat->isParticipant($user) || $user->isSupport() ||
             $chat->messages()->where('user_id', $user->id)->exists();
     }
 }
