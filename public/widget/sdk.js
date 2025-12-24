@@ -228,7 +228,7 @@
             this.log('Loading JS from: ' + script.src);
             script.onload = () => {
                 this.log('Vue app loaded');
-                this.mountWidget();
+                // The widget will call ChatWidget.onWidgetReady() when Vue is ready
             };
             script.onerror = (error) => {
                 this.log('Failed to load Vue app, using fallback...');
@@ -280,28 +280,32 @@
             }
         },
 
+        // Callback for when widget signals it's ready
+        onWidgetReady: function () {
+            this.log('Widget signaled ready, mounting...');
+            this.mountWidget();
+        },
+
         // Mount the widget
         mountWidget: function () {
-            // Wait a bit for the widget.js to fully initialize
-            setTimeout(() => {
-                if (typeof Vue === 'undefined') {
-                    console.error('ChatWidget: Vue is not loaded');
-                    return;
-                }
+            if (typeof Vue === 'undefined') {
+                console.error('ChatWidget: Vue is not loaded');
+                return;
+            }
 
-                const container = document.getElementById('chat-widget-container');
-                if (!container) {
-                    console.error('ChatWidget: Container not found');
-                    return;
-                }
+            const container = document.getElementById('chat-widget-container');
+            if (!container) {
+                console.error('ChatWidget: Container not found');
+                return;
+            }
 
-                // Enable pointer events on the widget
-                container.style.pointerEvents = 'auto';
+            // Enable pointer events on the widget
+            container.style.pointerEvents = 'auto';
 
-                // Create Vue app instance
-                const { createApp } = Vue;
-                const app = createApp({
-                    template: `
+            // Create Vue app instance
+            const { createApp } = Vue;
+            const app = createApp({
+                template: `
               <ChatWidget 
                 :api-key="apiKey" 
                 :api-url="apiUrl"
@@ -310,26 +314,25 @@
                 :design="design"
               />
             `,
-                    data() {
-                        return {
-                            apiKey: ChatWidget.config.apiKey,
-                            apiUrl: ChatWidget.config.apiUrl,
-                            primaryColor: ChatWidget.config.primaryColor,
-                            animations: ChatWidget.config.animations || {},
-                            design: ChatWidget.config.design || {}
-                        };
-                    }
-                });
-
-                // Register the ChatWidget component
-                if (window.ChatWidgetComponent) {
-                    app.component('ChatWidget', window.ChatWidgetComponent);
-                    app.mount('#chat-widget-container');
-                    this.log('Widget mounted successfully');
-                } else {
-                    console.error('ChatWidget: Component not found');
+                data() {
+                    return {
+                        apiKey: ChatWidget.config.apiKey,
+                        apiUrl: ChatWidget.config.apiUrl,
+                        primaryColor: ChatWidget.config.primaryColor,
+                        animations: ChatWidget.config.animations || {},
+                        design: ChatWidget.config.design || {}
+                    };
                 }
-            }, 200);
+            });
+
+            // Register the ChatWidget component
+            if (window.ChatWidgetComponent) {
+                app.component('ChatWidget', window.ChatWidgetComponent);
+                app.mount('#chat-widget-container');
+                this.log('Widget mounted successfully');
+            } else {
+                console.error('ChatWidget: Component not found');
+            }
         },
 
         // Send message in fallback mode

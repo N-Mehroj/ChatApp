@@ -7,13 +7,26 @@
     console.warn('Vue.js is required for ChatWidget. Loading from CDN...');
     loadVue().then(() => {
       // Give Vue a moment to fully initialize
-      setTimeout(initializeWidget, 100);
+      setTimeout(() => {
+        initializeWidget();
+        signalReady();
+      }, 100);
     }).catch(err => {
       console.error('Failed to load Vue:', err);
     });
   } else {
     // Even if Vue exists, wait a bit to ensure it's fully ready
-    setTimeout(initializeWidget, 50);
+    setTimeout(() => {
+      initializeWidget();
+      signalReady();
+    }, 50);
+  }
+
+  function signalReady() {
+    // Signal to the SDK that the widget is ready
+    if (window.ChatWidget && typeof window.ChatWidget.onWidgetReady === 'function') {
+      window.ChatWidget.onWidgetReady();
+    }
   }
 
   function loadVue() {
@@ -167,7 +180,7 @@
           if (designConfig.buttonStyle === 'floating') {
             baseStyle.borderRadius = '50%';
             if (animationConfig.enabled) {
-              baseStyle.transition = `all ${getAnimationDuration()} ease`;
+              baseStyle.transition = 'all ' + getAnimationDuration() + ' ease';
             }
           } else if (designConfig.buttonStyle === 'minimal') {
             baseStyle.borderRadius = getBorderRadius();
@@ -487,8 +500,7 @@
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              transition: animationConfig.enabled ? all ${getAnimationDuration()
-        } ease : 'none',
+              transition: animationConfig.enabled ? 'all ' + getAnimationDuration() + ' ease' : 'none',
               animation: animationConfig.enabled && animationConfig.slideIn ? 'slideInUp 0.3s ease-out' : 'none'
             }"
           >
