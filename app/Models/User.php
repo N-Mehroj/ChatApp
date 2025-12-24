@@ -91,6 +91,15 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    /**
+     * The accessors to append to the model's array form.
+     */
+    protected $appends = [
+        'display_name',
+        'avatar_url',
+        'is_online',
+    ];
+
     protected static function boot(): void
     {
         parent::boot();
@@ -168,6 +177,52 @@ class User extends Authenticatable
     public function isSupport(): bool
     {
         return $this->role === UserRole::Support;
+    }
+
+    /**
+     * Get display name for user
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        if ($this->first_name && $this->last_name) {
+            return trim($this->first_name . ' ' . $this->last_name);
+        }
+
+        if ($this->first_name) {
+            return $this->first_name;
+        }
+
+        if ($this->username) {
+            return $this->username;
+        }
+
+        return $this->email ?: 'Unknown User';
+    }
+
+    /**
+     * Get avatar URL for user
+     */
+    public function getAvatarUrlAttribute(): string
+    {
+        if ($this->image) {
+            return asset('storage/' . $this->image);
+        }
+
+        $name = urlencode($this->display_name);
+
+        return "https://ui-avatars.com/api/?name={$name}&background=3b82f6&color=fff&size=32";
+    }
+
+    /**
+     * Check if user is online (active in last 5 minutes)
+     */
+    public function getIsOnlineAttribute(): bool
+    {
+        if (! $this->last_activity) {
+            return false;
+        }
+
+        return $this->last_activity->gt(now()->subMinutes(5));
     }
 
     /**

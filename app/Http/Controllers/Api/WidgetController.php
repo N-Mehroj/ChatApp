@@ -14,6 +14,52 @@ use Illuminate\Support\Str;
 class WidgetController extends Controller
 {
     /**
+     * Get current user session for widget
+     */
+    public function session(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        $chat = null;
+        $operator = null;
+
+        if ($user) {
+            // Get or create chat for authenticated user
+            $chat = Chat::firstOrCreate([
+                'user_id' => $user->id
+            ]);
+
+            // Get random support operator info
+            $operator = User::whereIn('role', ['support', 'admin'])
+                ->first();
+        }
+
+        return response()->json([
+            'user' => $user ? [
+                'id' => $user->id,
+                'display_name' => $user->display_name,
+                'avatar_url' => $user->avatar_url,
+                'role' => $user->role?->value ?? 'user',
+                'is_online' => $user->is_online,
+            ] : null,
+            'chat_id' => $chat?->id,
+            'operator' => $operator ? [
+                'name' => $operator->display_name,
+                'avatar' => $operator->avatar_url,
+                'is_online' => $operator->is_online,
+            ] : [
+                'name' => 'Support Team',
+                'avatar' => null,
+                'is_online' => true,
+            ],
+            'config' => [
+                'allow_guests' => false,
+                'require_auth' => true,
+                'ws_url' => config('broadcasting.connections.reverb.url', 'ws://localhost:8080'),
+            ]
+        ]);
+    }
+
+    /**
      * Initialize a new widget session
      */
     public function createSession(Request $request): \Illuminate\Http\JsonResponse
@@ -296,5 +342,161 @@ class WidgetController extends Controller
                 'error' => 'Failed to end session',
             ], 500);
         }
+    }
+
+    /**
+     * Get messages for Vue.js widget
+     */
+    public function getMessages(Request $request, Chat $chat): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Authentication required'], 401);
+        }
+
+        if ($chat->user_id !== $user->id && !$user->isOperatorOrSupport()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $messages = $chat->messages()
+            ->with(['user:id,first_name,last_name,username,role,image'])
+            ->orderBy('created_at', 'asc')
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'messages' => $messages->map(function ($message) {
+                return [
+                    'id' => $message->id,
+                    'chat_id' => $message->chat_id,
+                    'user_id' => $message->user_id,
+                    'message' => $message->message,
+                    'from_operator' => $message->from_operator,
+                    'created_at' => $message->created_at,
+                    'read_at' => $message->read_at,
+                    'user' => [
+                        'id' => $message->user->id,
+                        'display_name' => $message->user->display_name,
+                        'avatar_url' => $message->user->avatar_url,
+                        'role' => $message->user->role?->value ?? 'user',
+                        'is_online' => $message->user->is_online,
+                    ]
+                ];
+            })
+        ]);
+    }
+
+    /**
+     * Send message via Vue.js widget
+     */
+    public function sendWidgetMessage(Request $request, Chat $chat): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'message' => 'required|string|max:1000',
+        ]);
+
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Authentication required'], 401);
+        }
+
+        if ($chat->user_id !== $user->id && !$user->isOperatorOrSupport()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $fromOperator = $user->isOperatorOrSupport();
+
+        $message = ChatMessage::create([
+            'chat_id' => $chat->id,
+            'user_id' => $user->id,
+            'message' => $request->input('message'),
+            'from_operator' => $fromOperator,
+        ]);
+
+        $message->load('user');
+        MessageSent::dispatch($message);
+
+        return response()->json([
+            'message' => [
+                'id' => $message->id,
+                'chat_id' => $message->chat_id,
+                'user_id' => $message->user_id,
+                'message' => $message->message,
+                'from_operator' => $message->from_operator,
+                'created_at' => $message->created_at,
+                'user' => [
+                    'id' => $message->user->id,
+                    'display_name' => $message->user->display_name,
+                    'avatar_url' => $message->user->avatar_url,
+                    'role' => $message->user->role?->value ?? 'user',
+                    'is_online' => $message->user->is_online,
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Mark message as read
+     */
+    public function markAsRead(Request $request, Chat $chat, ChatMessage $message): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['error' => 'Authentication required'], 401);
+        }
+
+        if ($chat->user_id !== $user->id && !$user->isOperatorOrSupport()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($message->user_id !== $user->id) {
+            $message->update([
+                'read_at' => now(),
+                'read_by' => $user->id,
+            ]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Get widget config
+     */
+    public function config(): \Illuminate\Http\JsonResponse
+    {
+        return response()->json([
+            'allow_guests' => false,
+            'require_auth' => true,
+            'primary_color' => '#3B82F6',
+            'position' => 'bottom-right',
+            'theme' => 'modern',
+            'ws_url' => config('broadcasting.connections.reverb.url', 'ws://localhost:8080'),
+            'app_key' => config('broadcasting.connections.reverb.app_key'),
+        ]);
+    }
+
+    /**
+     * Get support operators
+     */
+    public function operators(): \Illuminate\Http\JsonResponse
+    {
+        $operators = User::whereIn('role', ['support', 'admin'])
+            ->select(['id', 'first_name', 'last_name', 'username', 'image', 'last_activity'])
+            ->get();
+
+        return response()->json([
+            'operators' => $operators->map(function ($operator) {
+                return [
+                    'id' => $operator->id,
+                    'name' => $operator->display_name,
+                    'avatar' => $operator->avatar_url,
+                    'is_online' => $operator->is_online,
+                    'role' => $operator->role?->value ?? 'support',
+                ];
+            })
+        ]);
     }
 }

@@ -11,6 +11,9 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+// Widget demo routes
+require __DIR__ . '/widget.php';
+
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
@@ -40,6 +43,11 @@ Route::prefix('widget')->group(function () {
     Route::get('/demo', function () {
         return view('widget.demo');
     })->name('widget.demo');
+
+    // Vue.js Chat Demo with User Identification
+    Route::get('/chat/demo', function () {
+        return view('demo');
+    })->name('chat.demo');
 });
 
 // Serve widget assets
@@ -47,4 +55,4 @@ Route::get('/widget/sdk.js', function () {
     return response()->file(public_path('widget/sdk.js'));
 })->name('widget.sdk');
 
-require __DIR__.'/settings.php';
+require __DIR__ . '/settings.php';

@@ -1,0 +1,595 @@
+<!-- Vue Code Tab -->
+<div id="vue-code" class="tab-content">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">Vue.js Implementation</h2>
+        <div class="space-y-6">
+
+            <!-- Vue Setup -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">1. Vue App Setup</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>const { createApp, ref, onMounted, nextTick } = Vue;
+
+const ChatApp = {
+    setup() {
+        // User ma'lumotlari
+        const currentUser = ref({
+            id: {{ auth()->id() ?? 'null' }},
+            name: '{{ auth()->user()->name ?? "Demo User" }}',
+            role: '{{ auth()->user()->role ?? "user" }}'
+        });
+
+        // Chat holati
+        const messages = ref([]);
+        const newMessage = ref('');
+        const isSending = ref(false);
+        const isTyping = ref(false);
+        const typingUser = ref('');
+
+        return {
+            currentUser,
+            messages,
+            newMessage,
+            isSending,
+            isTyping,
+            typingUser
+        };
+    }
+};</code></pre>
+            </div>
+
+            <!-- Message Handling -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">2. Message Handling</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>const sendMessage = async () => {
+    if (!newMessage.value.trim() || isSending.value) return;
+    
+    isSending.value = true;
+    
+    try {
+        // Xabarni local qo'shish
+        const message = {
+            id: Date.now(),
+            content: newMessage.value,
+            sender_id: currentUser.value.id,
+            sender_name: currentUser.value.name,
+            sender_role: currentUser.value.role,
+            from_operator: ['support', 'admin'].includes(currentUser.value.role),
+            created_at: new Date().toISOString()
+        };
+        
+        messages.value.push(message);
+        newMessage.value = '';
+        
+        // Scroll to bottom
+        await nextTick();
+        scrollToBottom();
+        
+        // Backend ga yuborish (ixtiyoriy)
+        if (window.axios) {
+            await axios.post('/api/chats/1/messages', {
+                message: message.content
+            });
+        }
+        
+    } catch (error) {
+        console.error('Xabar yuborishda xatolik:', error);
+    } finally {
+        isSending.value = false;
+    }
+};
+
+const formatTime = (timestamp) => {
+    return new Date(timestamp).toLocaleTimeString('uz-UZ', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
+const scrollToBottom = () => {
+    const container = document.querySelector('[ref="messagesContainer"]');
+    if (container) {
+        container.scrollTop = container.scrollHeight;
+    }
+};</code></pre>
+            </div>
+
+            <!-- User Identification Template -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">3. User Identification in Template</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>&lt;!-- Xabar bubble --&gt;
+&lt;div v-for="message in messages" :key="message.id"&gt;
+    &lt;div :class="messageClasses(message)"&gt;
+        &lt;!-- Kim yozganligini ko'rsatish (faqat kelgan xabarlar uchun) --&gt;
+        &lt;div v-if="message.sender_id !== currentUser.id" 
+             class="text-xs mb-2 pb-2 border-b border-gray-200"&gt;
+            &lt;div class="flex items-center justify-between"&gt;
+                &lt;div class="flex items-center space-x-2"&gt;
+                    &lt;!-- User avatar --&gt;
+                    &lt;div class="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center"&gt;
+                        {{ message.sender_name.charAt(0).toUpperCase() }}
+                    &lt;/div&gt;
+                    &lt;!-- User nomi --&gt;
+                    &lt;span class="font-medium text-gray-600"&gt;{{ message.sender_name }}&lt;/span&gt;
+                &lt;/div&gt;
+                
+                &lt;!-- User role badge --&gt;
+                &lt;span v-if="message.from_operator"
+                      class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs"&gt;
+                    Support
+                &lt;/span&gt;
+                &lt;span v-else
+                      class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs"&gt;
+                    {{ message.sender_role }}
+                &lt;/span&gt;
+            &lt;/div&gt;
+        &lt;/div&gt;
+        
+        &lt;!-- Xabar matni --&gt;
+        &lt;div class="text-sm leading-relaxed"&gt;{{ message.content }}&lt;/div&gt;
+        
+        &lt;!-- Vaqt va status --&gt;
+        &lt;div class="text-xs mt-2 flex items-center justify-end"&gt;
+            &lt;span&gt;{{ formatTime(message.created_at) }}&lt;/span&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+&lt;/div&gt;</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Backend Integration Tab -->
+<div id="backend" class="tab-content">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">Backend Integration</h2>
+        <div class="space-y-6">
+
+            <!-- Laravel Controller -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">1. ChatController - Message Sending</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>public function sendMessage(Request $request, Chat $chat): JsonResponse
+{
+    $request->validate([
+        'message' => 'required|string|max:1000',
+    ]);
+
+    $user = $request->user();
+    
+    // Faqat support role yoki chat owner xabar yubora oladi
+    $fromOperator = in_array($user->role, ['support', 'admin']);
+    
+    if (!$fromOperator && $user->id !== $chat->user_id) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    $message = ChatMessage::create([
+        'chat_id' => $chat->id,
+        'user_id' => $user->id,
+        'message' => $request->input('message'),
+        'from_operator' => $fromOperator,
+    ]);
+
+    // User ma'lumotlarini yuklash - MUHIM!
+    $message->load('user');
+
+    // Real-time event yuborish
+    MessageSent::dispatch($message);
+
+    return response()->json([
+        'message' => [
+            'id' => $message->id,
+            'chat_id' => $message->chat_id,
+            'user_id' => $message->user_id,
+            'message' => $message->message,
+            'from_operator' => $message->from_operator,
+            'created_at' => $message->created_at,
+            'user' => [
+                'id' => $message->user->id,
+                'name' => $message->user->name,
+                'display_name' => $message->user->display_name, // Ism-familiya
+                'role' => $message->user->role,
+                'avatar_url' => $message->user->avatar_url,
+            ]
+        ]
+    ]);
+}</code></pre>
+            </div>
+
+            <!-- User Model Enhancement -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">2. User Model - Display Name</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>// app/Models/User.php
+class User extends Authenticatable
+{
+    // ... boshqa kod
+
+    /**
+     * To'liq ism-familiya yoki name qaytaradi
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        // Agar first_name va last_name mavjud bo'lsa
+        if ($this->first_name && $this->last_name) {
+            return "{$this->first_name} {$this->last_name}";
+        }
+        
+        // Faqat bitta nom mavjud bo'lsa
+        if ($this->first_name) return $this->first_name;
+        if ($this->last_name) return $this->last_name;
+        
+        // Aks holda name fielddan
+        return $this->name ?: 'Noma\'lum foydalanuvchi';
+    }
+
+    /**
+     * Avatar URL yaratish
+     */
+    public function getAvatarUrlAttribute(): string
+    {
+        if ($this->avatar) {
+            return Storage::url($this->avatar);
+        }
+        
+        // Default avatar yaratish
+        $initial = strtoupper(substr($this->display_name, 0, 1));
+        return "https://ui-avatars.com/api/?name={$initial}&background=6366f1&color=ffffff";
+    }
+
+    /**
+     * JSON serialization uchun appends
+     */
+    protected $appends = ['display_name', 'avatar_url'];
+}</code></pre>
+            </div>
+
+            <!-- API Routes -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">3. API Routes</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>// routes/api.php
+Route::middleware(['auth:sanctum'])->group(function () {
+    // Chat ro'yxati
+    Route::get('/chats', [ChatController::class, 'index']);
+    
+    // Bitta chatni olish
+    Route::get('/chats/{chat}', [ChatController::class, 'show']);
+    
+    // Xabar yuborish - USER IDENTIFICATION bilan
+    Route::post('/chats/{chat}/messages', [ChatController::class, 'sendMessage']);
+    
+    // Xabarni o'qilgan deb belgilash
+    Route::patch('/chats/{chat}/messages/{message}/read', [ChatController::class, 'markAsRead']);
+    
+    // Foydalanuvchi online statusini yangilash
+    Route::post('/user/online', [UserStatusController::class, 'setOnline']);
+    Route::post('/user/offline', [UserStatusController::class, 'setOffline']);
+});</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WebSocket Events Tab -->
+<div id="websocket" class="tab-content">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800">WebSocket Events & Real-time User Identification</h2>
+        <div class="space-y-6">
+
+            <!-- MessageSent Event -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">1. MessageSent Event (Enhanced)</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>// app/Events/MessageSent.php
+class MessageSent implements ShouldBroadcast
+{
+    public function __construct(public ChatMessage $message) {}
+
+    public function broadcastOn(): array
+    {
+        return [
+            new PrivateChannel('chat.' . $this->message->chat_id),
+        ];
+    }
+
+    public function broadcastAs(): string
+    {
+        return 'message.sent';
+    }
+
+    /**
+     * To'liq user ma'lumotlarini yuborish - USER IDENTIFICATION uchun
+     */
+    public function broadcastWith(): array
+    {
+        return [
+            'message' => [
+                'id' => $this->message->id,
+                'chat_id' => $this->message->chat_id,
+                'user_id' => $this->message->user_id,
+                'message' => $this->message->message,
+                'from_operator' => $this->message->from_operator,
+                'created_at' => $this->message->created_at,
+                'read_at' => $this->message->read_at,
+                'user' => [
+                    'id' => $this->message->user->id,
+                    'name' => $this->message->user->name,
+                    'display_name' => $this->message->user->display_name, // To'liq ism
+                    'avatar_url' => $this->message->user->avatar_url,     // Avatar
+                    'role' => $this->message->user->role,                 // Role
+                    'is_online' => $this->message->user->is_online ?? false, // Online status
+                ]
+            ]
+        ];
+    }
+}</code></pre>
+            </div>
+
+            <!-- Vue WebSocket Listener -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">2. Vue.js WebSocket Listener</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>// WebSocket orqali keluvchi xabarlarni qabul qilish
+onMounted(() => {
+    if (window.Echo) {
+        window.Echo.private(`chat.1`)
+            .listen('.message.sent', (eventData) => {
+                const messageData = eventData.message;
+                
+                console.log('Yangi xabar keldi:', messageData);
+                
+                // User identifikatsiya ma'lumotlarini olish
+                const senderInfo = {
+                    id: messageData.user.id,
+                    name: messageData.user.display_name || messageData.user.name,
+                    role: messageData.user.role,
+                    avatar_url: messageData.user.avatar_url,
+                    is_online: messageData.user.is_online
+                };
+                
+                // Xabarni format qilish
+                const formattedMessage = {
+                    id: messageData.id,
+                    content: messageData.message,
+                    sender_id: messageData.user_id,
+                    sender_name: senderInfo.name,
+                    sender_role: senderInfo.role,
+                    sender_avatar: senderInfo.avatar_url,
+                    from_operator: messageData.from_operator,
+                    created_at: messageData.created_at,
+                    user: senderInfo // To'liq user ma'lumotlari
+                };
+                
+                // Dublikatlashni oldini olish
+                const exists = messages.value.find(m => m.id === messageData.id);
+                if (!exists) {
+                    messages.value.push(formattedMessage);
+                    
+                    // Auto-scroll
+                    nextTick(() => scrollToBottom());
+                    
+                    // Desktop notification (ixtiyoriy)
+                    if (messageData.user_id !== currentUser.value.id) {
+                        showNotification(senderInfo.name, messageData.message);
+                    }
+                }
+            })
+            .subscribed(() => {
+                console.log('Chat kanaliga ulandi');
+            })
+            .error((error) => {
+                console.error('WebSocket xatosi:', error);
+            });
+    }
+});</code></pre>
+            </div>
+
+            <!-- Message Display Logic -->
+            <div>
+                <h3 class="text-lg font-semibold mb-3">3. User Identification Display Logic</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>// Kim yozganligini aniqlash uchun helper methodlar
+const getUserDisplayInfo = (message) => {
+    const isMyMessage = message.sender_id === currentUser.value.id;
+    const senderName = message.sender_name || message.user?.display_name || 'Noma\'lum';
+    const senderRole = message.sender_role || message.user?.role || 'user';
+    const isOperator = message.from_operator || ['support', 'admin'].includes(senderRole);
+    
+    return {
+        isMyMessage,
+        senderName,
+        senderRole,
+        isOperator,
+        displayText: isMyMessage ? 'Siz' : senderName,
+        roleText: isOperator ? 'Support' : senderRole,
+        avatarLetter: senderName.charAt(0).toUpperCase()
+    };
+};
+
+// Template da ishlatish
+const messageClasses = (message) => {
+    const info = getUserDisplayInfo(message);
+    return [
+        'max-w-xs lg:max-w-md p-3 rounded-lg relative',
+        info.isMyMessage ? 
+        'bg-blue-500 text-white ml-auto rounded-br-none' : 
+        'bg-white text-gray-800 shadow-md border border-gray-200 rounded-bl-none'
+    ];
+};
+
+// Desktop notification
+const showNotification = (senderName, messageText) => {
+    if (Notification.permission === 'granted') {
+        new Notification(`${senderName}dan xabar`, {
+            body: messageText,
+            icon: '/favicon.ico'
+        });
+    }
+};</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Vue App Script -->
+<script>
+    const { createApp, ref, onMounted, nextTick } = Vue;
+
+    // Axios setup
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    const ChatApp = {
+        setup() {
+            const messages = ref([
+                {
+                    id: 1,
+                    content: 'Salom! Sizga qanday yordam bera olaman?',
+                    sender_id: 2,
+                    sender_name: 'Jasur Karimov',
+                    sender_role: 'support',
+                    from_operator: true,
+                    created_at: new Date().toISOString()
+                },
+                {
+                    id: 2,
+                    content: 'Salom! Men loyiham haqida savol bor edi.',
+                    sender_id: {{ auth()-> id() ?? '1' }
+    },
+        sender_name: '{{ auth()->user()->name ?? "Siz" }}',
+        sender_role: '{{ auth()->user()->role ?? "user" }}',
+        from_operator: {{ in_array(auth() -> user() -> role ?? 'user', ['support', 'admin']) ? 'true' : 'false' }},
+    created_at: new Date(Date.now() - 60000).toISOString()
+                    }
+                ]);
+
+    const newMessage = ref('');
+    const isSending = ref(false);
+    const isTyping = ref(false);
+    const typingUser = ref('Support Agent');
+
+    const currentUser = ref({
+        id: {{ auth()-> id() ?? '1' }},
+    name: '{{ auth()->user()->name ?? "Demo User" }}',
+        role: '{{ auth()->user()->role ?? "user" }}'
+                });
+
+    const sendMessage = () => {
+        if (!newMessage.value.trim() || isSending.value) return;
+
+        isSending.value = true;
+
+        const message = {
+            id: Date.now(),
+            content: newMessage.value,
+            sender_id: currentUser.value.id,
+            sender_name: currentUser.value.name,
+            sender_role: currentUser.value.role,
+            from_operator: ['support', 'admin'].includes(currentUser.value.role),
+            created_at: new Date().toISOString()
+        };
+
+        messages.value.push(message);
+        newMessage.value = '';
+
+        setTimeout(() => {
+            isSending.value = false;
+            nextTick(() => scrollToBottom());
+        }, 500);
+    };
+
+    const handleTyping = () => {
+        // Typing indicator logic (demo)
+    };
+
+    const simulateOperatorMessage = () => {
+        const operatorMessages = [
+            'Tabriklaymiz! Sizning so\'rovingiz qabul qilindi.',
+            'Qo\'shimcha ma\'lumot kerak bo\'lsa, menga ayting.',
+            'Bu masala bo\'yicha sizga yordam bera olaman.',
+            'Boshqa savollaringiz bormi?'
+        ];
+
+        const randomMessage = operatorMessages[Math.floor(Math.random() * operatorMessages.length)];
+
+        setTimeout(() => {
+            const message = {
+                id: Date.now(),
+                content: randomMessage,
+                sender_id: 2,
+                sender_name: 'Jasur Karimov',
+                sender_role: 'support',
+                from_operator: true,
+                created_at: new Date().toISOString()
+            };
+
+            messages.value.push(message);
+            nextTick(() => scrollToBottom());
+        }, 1000);
+    };
+
+    const simulateTyping = () => {
+        isTyping.value = true;
+        setTimeout(() => {
+            isTyping.value = false;
+        }, 3000);
+    };
+
+    const clearMessages = () => {
+        messages.value = [];
+    };
+
+    const formatTime = (timestamp) => {
+        return new Date(timestamp).toLocaleTimeString('uz-UZ', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const scrollToBottom = () => {
+        const container = document.querySelector('[ref="messagesContainer"]');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    };
+
+    onMounted(() => {
+        nextTick(() => scrollToBottom());
+    });
+
+    return {
+        messages,
+        newMessage,
+        currentUser,
+        isSending,
+        isTyping,
+        typingUser,
+        sendMessage,
+        handleTyping,
+        simulateOperatorMessage,
+        simulateTyping,
+        clearMessages,
+        formatTime
+    };
+            }
+        };
+
+    // Tab functionality
+    function showTab(tabName) {
+        // Hide all tabs
+        const tabs = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => tab.classList.remove('active'));
+
+        // Show selected tab
+        const selectedTab = document.getElementById(tabName);
+        if (selectedTab) {
+            selectedTab.classList.add('active');
+        }
+
+        // Update button states
+        const buttons = document.querySelectorAll('.tab-button');
+        buttons.forEach(button => button.classList.remove('active'));
+        event.target.classList.add('active');
+    }
+
+    // Mount the Vue app
+    createApp(ChatApp).mount('#chat-app');
+</script>
+</body>
+
+</html>

@@ -525,17 +525,44 @@
 
               <!-- Message Bubble -->
               <div
-                class="max-w-[250px] sm:max-w-xs lg:max-w-md px-3 py-2 sm:px-4 rounded-2xl shadow-sm"
+                class="max-w-[250px] sm:max-w-xs lg:max-w-md rounded-2xl shadow-sm"
                 :class="
                   message.user_id === user.id
                     ? 'bg-telegram-blue text-white rounded-br-md'
                     : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md'
                 "
               >
-                <p class="text-sm sm:text-base leading-relaxed break-words">
-                  {{ message.message }}
-                </p>
-                <div class="flex items-center justify-end mt-1 gap-1">
+                <!-- Sender Info for received messages -->
+                <div 
+                  v-if="message.user_id !== user.id" 
+                  class="px-3 pt-2 pb-1 border-b border-gray-200 dark:border-gray-600"
+                >
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-gray-600 dark:text-gray-300">
+                      {{ getUserDisplayName(message.user) }}
+                    </span>
+                    <span 
+                      v-if="message.from_operator" 
+                      class="bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full text-xs font-medium"
+                    >
+                      Support
+                    </span>
+                    <span 
+                      v-else-if="message.user.role" 
+                      class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-xs capitalize"
+                    >
+                      {{ message.user.role }}
+                    </span>
+                  </div>
+                </div>
+                
+                <div class="px-3 py-2">
+                  <p class="text-sm sm:text-base leading-relaxed break-words">
+                    {{ message.message }}
+                  </p>
+                </div>
+                
+                <div class="flex items-center justify-end px-3 pb-2 gap-1">
                   <span
                     class="text-xs"
                     :class="

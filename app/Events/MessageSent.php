@@ -3,13 +3,9 @@
 namespace App\Events;
 
 use App\Models\ChatMessage;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
@@ -29,7 +25,7 @@ class MessageSent implements ShouldBroadcastNow
         Log::info('MessageSent event created', [
             'message_id' => $message->id,
             'chat_id' => $message->chat_id,
-            'user_id' => $message->user_id
+            'user_id' => $message->user_id,
         ]);
     }
 
@@ -46,7 +42,7 @@ class MessageSent implements ShouldBroadcastNow
 
         Log::info('Broadcasting to channels', [
             'channels' => array_map(fn($channel) => $channel->name, $channels),
-            'message_id' => $this->message->id
+            'message_id' => $this->message->id,
         ]);
 
         return $channels;
@@ -79,8 +75,14 @@ class MessageSent implements ShouldBroadcastNow
                     'id' => $this->message->user->id,
                     'first_name' => $this->message->user->first_name,
                     'last_name' => $this->message->user->last_name,
-                ]
-            ]
+                    'username' => $this->message->user->username,
+                    'email' => $this->message->user->email,
+                    'role' => $this->message->user->role->value ?? 'user',
+                    'display_name' => $this->message->user->display_name,
+                    'avatar_url' => $this->message->user->avatar_url,
+                    'is_online' => $this->message->user->is_online,
+                ],
+            ],
         ];
     }
 }
