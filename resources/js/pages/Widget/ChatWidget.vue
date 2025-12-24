@@ -209,7 +209,7 @@ const initializeSession = async () => {
     const response = await axios.post(`${props.apiUrl}/session`, {
       api_key: props.apiKey
     });
-    
+        
     sessionId.value = response.data.session_id;
     messages.value = response.data.messages || [];
     supportAgent.value = response.data.agent || { name: 'Support Team' };

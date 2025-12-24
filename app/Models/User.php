@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\User\UserSourceEnum;
+use App\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -116,6 +117,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'telegram_id' => 'int',
             'additional_telegram_ids' => 'array',
+            'role' => UserRole::class,
         ];
     }
 
@@ -142,5 +144,69 @@ class User extends Authenticatable
     public function favorites(): BelongsToMany
     {
         return $this->belongsToMany(Merchant::class);
+    }
+
+    /**
+     * Check if user is an admin
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::Admin;
+    }
+
+    /**
+     * Check if user is an operator
+     */
+    public function isOperator(): bool
+    {
+        return $this->role === UserRole::Operator;
+    }
+
+    /**
+     * Check if user is support
+     */
+    public function isSupport(): bool
+    {
+        return $this->role === UserRole::Support;
+    }
+
+    /**
+     * Check if user is a merchant
+     */
+    public function isMerchant(): bool
+    {
+        return $this->role === UserRole::Merchant;
+    }
+
+    /**
+     * Check if user is operator or support
+     */
+    public function isOperatorOrSupport(): bool
+    {
+        return $this->role && $this->role->isOperatorOrSupport();
+    }
+
+    /**
+     * Scope query to only operators
+     */
+    public function scopeOperators(Builder $query): Builder
+    {
+        return $query->where('role', UserRole::Operator->value);
+    }
+
+    /**
+     * Scope query to only support users
+     */
+    public function scopeSupport(Builder $query): Builder
+    {
+        return $query->where('role', UserRole::Support->value);
+    }
+
+    /**
+     * Scope query to operators and support users
+     */
+    public function scopeOperatorsAndSupport(Builder $query): Builder
+    {
+        return $query->whereIn('role', [UserRole::Operator->value, UserRole::Support->value]);
     }
 }
