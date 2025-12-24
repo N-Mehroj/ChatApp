@@ -14,7 +14,7 @@
       >
         <h1 class="text-lg font-medium">Chat</h1>
         <button
-          v-if="user.role && ['support', 'admin'].includes(user.role)"
+          v-if="user.role && ['support', 'admin'].includes(user.role.toLowerCase())"
           @click="showUserList = true"
           class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
         >
@@ -55,7 +55,18 @@
 
       <!-- Chat List -->
       <div class="flex-1 overflow-y-auto">
-        <div v-if="chatList.length === 0" class="p-8 text-center">
+        <!-- Loading indicator for chat list -->
+        <div 
+          v-if="isLoading" 
+          class="p-4 border-b border-gray-200 dark:border-gray-700"
+        >
+          <div class="flex items-center justify-center space-x-2 text-sm text-gray-500">
+            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+            <span>Chatlar yuklanmoqda...</span>
+          </div>
+        </div>
+        
+        <div v-if="chatList.length === 0 && !isLoading" class="p-8 text-center">
           <div class="text-gray-400 mb-2">
             <svg
               class="w-16 h-16 mx-auto mb-4"
@@ -149,7 +160,7 @@
         >
           <h1 class="text-lg font-medium">Chat</h1>
           <button
-            v-if="user.role && ['support', 'admin'].includes(user.role)"
+            v-if="user.role && ['support', 'admin'].includes(user.role.toLowerCase())"
             @click="showUserList = true"
             class="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center transition-colors"
           >
@@ -292,6 +303,33 @@
       </div>
 
       <div v-else class="flex-1 flex flex-col h-full max-h-screen overflow-hidden">
+        <!-- Loading and Connection Status Bar -->
+        <div 
+          v-if="loadingStage || channelStatus || isLoadingMessages || isConnectingChannels" 
+          class="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-700 p-2"
+        >
+          <div class="flex items-center justify-center space-x-2 text-sm">
+            <!-- Loading Spinner -->
+            <div 
+              v-if="isLoadingMessages || isConnectingChannels"
+              class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"
+            ></div>
+            
+            <!-- Status Text -->
+            <span class="text-blue-700 dark:text-blue-300">
+              {{ loadingStage || channelStatus || 'Yuklanmoqda...' }}
+            </span>
+            
+            <!-- Connected Channels Count -->
+            <span 
+              v-if="connectedChannels.size > 0" 
+              class="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-1 rounded-full text-xs"
+            >
+              {{ connectedChannels.size }} kanal ulandi
+            </span>
+          </div>
+        </div>
+
         <!-- Mobile Chat Header (with back button) -->
         <div
           class="md:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center"
@@ -437,7 +475,18 @@
             minHeight: '200px',
           }"
         >
-          <div v-if="currentChatMessages.length === 0" class="text-center py-16">
+          <!-- Loading Messages Indicator -->
+          <div 
+            v-if="isLoadingMessages" 
+            class="text-center py-8"
+          >
+            <div class="inline-flex items-center space-x-2 text-gray-500 dark:text-gray-400">
+              <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+              <span class="text-sm">Xabarlar yuklanmoqda...</span>
+            </div>
+          </div>
+
+          <div v-else-if="currentChatMessages.length === 0" class="text-center py-16">
             <div
               class="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
             >
@@ -563,7 +612,7 @@
 
       <!-- Message Input - Only for Support Users -->
       <div
-        v-if="user.role && ['support', 'admin'].includes(user.role)"
+        v-if="user.role && ['support', 'admin'].includes(user.role.toLowerCase())"
         class="sticky bottom-0 border-t border-gray-200 dark:border-gray-700 p-2 sm:p-4 bg-white dark:bg-gray-800 mt-auto"
       >
         <form
@@ -808,6 +857,13 @@ const onlineUsers = ref(new Set()); // Track online users
 const userStatuses = ref({}); // Track detailed user statuses
 const activeChannel = ref(null); // Track current active channel for cleanup
 
+// Loading and connection states
+const isLoadingMessages = ref(false);
+const isConnectingChannels = ref(false);
+const connectedChannels = ref(new Set());
+const channelStatus = ref('');
+const loadingStage = ref('');
+
 // Computed
 const page = usePage();
 
@@ -818,29 +874,39 @@ const svgBg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><de
 const loadChatMessages = async (chat) => {
   if (!chat) return;
 
-  isLoading.value = true;
+  isLoadingMessages.value = true;
+  loadingStage.value = 'Xabarlar yuklanmoqda...';
+  
   try {
     const response = await axios.get(`/chat/${chat.id}/messages`);
     currentChatMessages.value = response.data.messages;
+    loadingStage.value = 'Xabarlar yuklandi';
     await nextTick();
     scrollToBottom();
   } catch (error) {
     console.error("Xabarlarni yuklashda xato:", error);
+    loadingStage.value = 'Xabarlarni yuklashda xato!';
   } finally {
-    isLoading.value = false;
+    isLoadingMessages.value = false;
+    setTimeout(() => loadingStage.value = '', 2000);
   }
 };
 
 // Select chat
 const selectChat = async (chat) => {
+  loadingStage.value = 'Chat tanlanmoqda...';
+  
   // Clean up only the previous active channel (preserve global listeners)
   cleanupActiveChannel();
   selectedChat.value = chat;
+  
+  loadingStage.value = 'Xabarlar yuklanmoqda...';
   await loadChatMessages(chat);
 
   // Clear unread count for the selected chat using helper function
   resetUnreadCount(chat.id);
 
+  loadingStage.value = 'Xabarlar o\'qilgan deb belgilanmoqda...';
   // Mark messages as read
   try {
     await axios.post(`/chat/${chat.id}/mark-read`);
@@ -850,6 +916,7 @@ const selectChat = async (chat) => {
   }
 
   // Setup real-time messaging for the new chat
+  loadingStage.value = 'WebSocket ulanmoqda...';
   setupEcho();
 };
 
@@ -858,7 +925,7 @@ const sendMessage = async () => {
   if (!newMessage.value.trim() || sending.value || !selectedChat.value) return;
 
   // Only support users can send messages
-  if (!props.user.role || !["support", "admin"].includes(props.user.role)) {
+  if (!props.user.role || !["support", "admin"].includes(props.user.role.toLowerCase())) {
     console.error("Only support users can send messages");
     return;
   }
@@ -1165,11 +1232,16 @@ const setupEcho = () => {
   }
 
   const channelName = `chat.${selectedChat.value.id}`;
+  
+  isConnectingChannels.value = true;
+  channelStatus.value = `Kanal ulanmoqda: ${channelName}`;
+  loadingStage.value = 'WebSocket kanali ulanmoqda...';
 
   // Clean up previous active channel
   if (activeChannel.value && activeChannel.value !== channelName) {
     console.log(`🧹 Leaving previous channel: ${activeChannel.value}`);
     window.Echo.leave(activeChannel.value);
+    connectedChannels.value.delete(activeChannel.value);
   }
 
   // Leave current channel if exists (for safety)
@@ -1269,9 +1341,28 @@ const setupEcho = () => {
     })
     .subscribed(() => {
       console.log(`✅ Successfully subscribed to ${channelName}`);
+      connectedChannels.value.add(channelName);
+      isConnectingChannels.value = false;
+      channelStatus.value = `Ulandi: ${channelName}`;
+      loadingStage.value = 'Kanal muvaffaqiyatli ulandí';
+      
+      // Clear status after 2 seconds
+      setTimeout(() => {
+        channelStatus.value = '';
+        loadingStage.value = '';
+      }, 2000);
     })
     .error((error) => {
       console.error(`❌ Subscription error for ${channelName}:`, error);
+      isConnectingChannels.value = false;
+      channelStatus.value = `Xato: ${channelName}`;
+      loadingStage.value = 'Kanal ulanishida xato!';
+      
+      // Clear error after 3 seconds
+      setTimeout(() => {
+        channelStatus.value = '';
+        loadingStage.value = '';
+      }, 3000);
     });
 };
 
@@ -1283,6 +1374,7 @@ const cleanupActiveChannel = () => {
   if (activeChannel.value) {
     console.log(`🧹 Cleaning up active channel: ${activeChannel.value}`);
     window.Echo.leave(activeChannel.value);
+    connectedChannels.value.delete(activeChannel.value);
     activeChannel.value = null;
   }
 };
@@ -1312,9 +1404,12 @@ const cleanupAllChannels = () => {
 // Setup global Echo listeners for chat notifications
 const setupGlobalEcho = () => {
   console.log("🌍 setupGlobalEcho called - setting up background listeners");
+  
+  channelStatus.value = 'Global kanallar ulanmoqda...';
 
   if (!window.Echo) {
     console.error("❌ Echo not available for global setup");
+    channelStatus.value = 'Echo mavjud emas!';
     return;
   }
 
@@ -1355,6 +1450,13 @@ const setupGlobalEcho = () => {
         })
         .subscribed(() => {
           console.log(`✅ Background subscription active for chat ${chat.id}`);
+          connectedChannels.value.add(`chat.${chat.id}`);
+          
+          // Update status when all chats are connected
+          if (connectedChannels.value.size > 0) {
+            channelStatus.value = `${connectedChannels.value.size} chat kanali ulandi`;
+            setTimeout(() => channelStatus.value = '', 3000);
+          }
         })
         .error((error) => {
           console.error(`❌ Background subscription error for chat ${chat.id}:`, error);
@@ -1408,6 +1510,7 @@ const subscribeToSingleChat = (chat) => {
     })
     .subscribed(() => {
       console.log(`✅ Background subscription active for new chat ${chat.id}`);
+      connectedChannels.value.add(`chat.${chat.id}`);
     })
     .error((error) => {
       console.error(`❌ Background subscription error for new chat ${chat.id}:`, error);
