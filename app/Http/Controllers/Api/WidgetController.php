@@ -130,7 +130,7 @@ class WidgetController extends Controller
                     'session_user_id' => $session->user_id,
                     'merchant_id' => $merchant->id
                 ]);
-                
+
                 // For logged-in users: find or create THE ONE chat between merchant and visitor user
                 $chat = Chat::where('user_id', $merchant->id)
                     ->where('visitor_user_id', $session->user_id)
@@ -264,7 +264,7 @@ class WidgetController extends Controller
                 $chat = Chat::where('user_id', $merchant->id)
                     ->where('visitor_user_id', $session->user_id)
                     ->first();
-                    
+
                 \Log::info('Widget SendMessage - Looking for user chat', [
                     'merchant_id' => $merchant->id,
                     'visitor_user_id' => $session->user_id,
