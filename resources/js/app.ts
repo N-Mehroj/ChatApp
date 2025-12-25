@@ -58,6 +58,16 @@ console.log("🔧 Echo setup completed");
 
 const appName = import.meta.env.VITE_APP_NAME || "Laravel";
 
+// Setup axios defaults for CSRF token
+import axios from 'axios';
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+const token = document.head.querySelector('meta[name="csrf-token"]') as HTMLMetaElement;
+if (token) {
+  axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+} else {
+  console.error('CSRF token not found: https://laravel.com/docs/csrf#csrf-x-csrf-token');
+}
+
 createInertiaApp({
   title: (title) => (title ? `${title} - ${appName}` : appName),
   resolve: (name) =>
