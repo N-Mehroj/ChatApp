@@ -334,7 +334,7 @@
             if (data.messages && data.messages.length > 0) {
               console.log('First message:', data.messages[0]?.message);
               console.log('Last message:', data.messages[data.messages.length - 1]?.message);
-              console.log('All messages:', data.messages.map(m => `${m.is_from_user ? 'User' : 'Support'}: ${m.message}`));
+              console.log('All messages:', data.messages.map(m => `${m.from_operator ? 'Support' : 'User'}: ${m.message}`));
             } else {
               console.log('No messages in response - checking user identification...');
             }
@@ -367,7 +367,7 @@
               {
                 id: 1,
                 message: 'We could not connect right now. Please reload or try again.',
-                is_from_user: false,
+                from_operator: true,
                 created_at: new Date().toISOString()
               }
             ];
@@ -524,7 +524,7 @@
           const userMessage = {
             id: Date.now(),
             message: message,
-            is_from_user: true,
+            from_operator: false,
             created_at: new Date().toISOString()
           };
 
@@ -583,7 +583,7 @@
             messages.value.push({
               id: Date.now() + 1,
               message: 'Sorry, there was an error sending your message. Please try again.',
-              is_from_user: false,
+              from_operator: true,
               created_at: new Date().toISOString()
             });
             scrollToBottom();
@@ -902,22 +902,22 @@
                   v-for="message in messages"
                   :key="message.id"
                   style="display: flex;"
-                  :style="message.is_from_user ? 'justify-content: flex-end' : 'justify-content: flex-start'"
+                  :style="!message.from_operator ? 'justify-content: flex-end' : 'justify-content: flex-start'"
                 >
                   <!-- Support Avatar -->
                   <div
-                    v-if="!message.is_from_user"
+                    v-if="message.from_operator"
                     :style="{ width: '24px', height: '24px', background: primaryColor, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '12px', marginRight: '8px', marginTop: '4px', flexShrink: '0' }"
                   >
                     {{ (supportAgent.name || 'S').charAt(0).toUpperCase() }}
                   </div>
 
                   <!-- Message Bubble -->
-                  <div :style="getMessageStyle(message.is_from_user)">
+                  <div :style="getMessageStyle(!message.from_operator)">
                     <p style="margin: 0;">{{ message.message }}</p>
                     <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
                       <span
-                        :style="{ fontSize: '12px', color: message.is_from_user ? 'rgba(255, 255, 255, 0.7)' : '#6B7280' }"
+                        :style="{ fontSize: '12px', color: !message.from_operator ? 'rgba(255, 255, 255, 0.7)' : '#6B7280' }"
                       >
                         {{ formatTime(message.created_at) }}
                       </span>

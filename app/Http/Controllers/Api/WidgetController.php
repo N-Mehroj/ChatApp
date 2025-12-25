@@ -151,7 +151,8 @@ class WidgetController extends Controller
                     return [
                         'id' => $message->id,
                         'message' => $message->message,
-                        'is_from_user' => $message->user_id !== $merchant->id,
+                        'from_operator' => $message->from_operator,
+                        'is_from_user' => $message->user_id !== $merchant->id, // Keep for backward compatibility
                         'created_at' => $message->created_at->toISOString(),
                     ];
                 });
@@ -301,7 +302,8 @@ class WidgetController extends Controller
                     return [
                         'id' => $message->id,
                         'message' => $message->message,
-                        'is_from_user' => $message->user_id !== $merchant->id,
+                        'from_operator' => $message->from_operator,
+                        'is_from_user' => $message->user_id !== $merchant->id, // Keep for backward compatibility
                         'created_at' => $message->created_at->toISOString(),
                     ];
                 });
