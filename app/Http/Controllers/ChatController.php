@@ -116,9 +116,12 @@ class ChatController extends Controller
                 'is_new' => true,
             ]);
 
-            // Broadcast chat creation to the user
-            broadcast(new ChatCreated($chat));
-            Log::info('ChatCreated event broadcasted', [
+            // Queue the broadcast to prevent blocking
+            dispatch(function () use ($chat) {
+                broadcast(new ChatCreated($chat));
+            })->onQueue('broadcasts');
+
+            Log::info('ChatCreated queued for broadcast', [
                 'chat_id' => $chat->id,
                 'user_id' => $userId,
             ]);
@@ -158,24 +161,38 @@ class ChatController extends Controller
         // Load user for message
         $message->load('user');
 
-        // Broadcast to chat channels (for chat interface)
-        $broadcastEvent = new MessageSent($message);
-        broadcast($broadcastEvent)->toOthers();
+        // Use queued broadcasting to prevent blocking
+        try {
+            // Broadcast to chat channels (for chat interface) - queued
+            dispatch(function () use ($message) {
+                broadcast(new MessageSent($message))->toOthers();
+            })->onQueue('broadcasts');
 
-        // If this is a widget chat, also broadcast to widget session channel
-        $widgetSession = $chat->widgetSession;
-        if ($widgetSession) {
-            broadcast(new WidgetMessageSent($message, $widgetSession))->toOthers();
-            Log::info('WidgetMessageSent broadcast sent from ChatController', [
+            // If this is a widget chat, also broadcast to widget session channel - queued
+            $widgetSession = $chat->widgetSession;
+            if ($widgetSession) {
+                dispatch(function () use ($message, $widgetSession) {
+                    broadcast(new WidgetMessageSent($message, $widgetSession))->toOthers();
+                })->onQueue('broadcasts');
+
+                Log::info('WidgetMessageSent queued for broadcast', [
+                    'chat_id' => $chat->id,
+                    'message_id' => $message->id,
+                    'session_id' => $widgetSession->session_id,
+                ]);
+            }
+
+            // Broadcast chat update to update chat lists - queued
+            dispatch(function () use ($chat, $message) {
+                broadcast(new ChatUpdated($chat, $message));
+            })->onQueue('broadcasts');
+        } catch (\Exception $e) {
+            Log::error('Broadcasting failed (non-blocking)', [
+                'error' => $e->getMessage(),
                 'chat_id' => $chat->id,
                 'message_id' => $message->id,
-                'session_id' => $widgetSession->session_id,
-                'widget_channel' => 'widget.session.' . $widgetSession->session_id,
             ]);
         }
-
-        // Broadcast chat update to update chat lists
-        broadcast(new ChatUpdated($chat, $message));
 
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
@@ -223,10 +240,12 @@ class ChatController extends Controller
                     'read_by' => $user->id,
                 ]);
 
-            // Broadcast message read event
-            $event = new MessageRead($chat, $user, $unreadMessages);
-            broadcast($event);
-            Log::info('MessageRead event broadcasted (getMessages)', [
+            // Queue the broadcast to prevent blocking
+            dispatch(function () use ($chat, $user, $unreadMessages) {
+                broadcast(new MessageRead($chat, $user, $unreadMessages));
+            })->onQueue('broadcasts');
+
+            Log::info('MessageRead queued for broadcast', [
                 'chat_id' => $chat->id,
                 'reader_id' => $user->id,
                 'message_count' => count($unreadMessages),
@@ -311,10 +330,12 @@ class ChatController extends Controller
                     'read_by' => $user->id,
                 ]);
 
-            // Broadcast message read event
-            $event = new MessageRead($chat, $user, $unreadMessages);
-            broadcast($event);
-            Log::info('MessageRead event broadcasted (markAsRead)', [
+            // Queue the broadcast to prevent blocking
+            dispatch(function () use ($chat, $user, $unreadMessages) {
+                broadcast(new MessageRead($chat, $user, $unreadMessages));
+            })->onQueue('broadcasts');
+
+            Log::info('MessageRead queued for broadcast', [
                 'chat_id' => $chat->id,
                 'reader_id' => $user->id,
                 'message_count' => count($unreadMessages),
@@ -333,10 +354,12 @@ class ChatController extends Controller
         // Update user's last activity
         $user->update(['last_activity' => now()]);
 
-        // Broadcast online status
-        $event = new UserOnlineStatus($user, true);
-        broadcast($event);
-        Log::info('User online status broadcasted', ['user_id' => $user->id, 'status' => 'online']);
+        // Queue the broadcast to prevent blocking
+        dispatch(function () use ($user) {
+            broadcast(new UserOnlineStatus($user, true));
+        })->onQueue('broadcasts');
+
+        Log::info('User online status queued for broadcast', ['user_id' => $user->id, 'status' => 'online']);
 
         return response()->json([
             'success' => true,
@@ -348,10 +371,12 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        // Broadcast offline status
-        $event = new UserOnlineStatus($user, false);
-        broadcast($event);
-        Log::info('User offline status broadcasted', ['user_id' => $user->id, 'status' => 'offline']);
+        // Queue the broadcast to prevent blocking
+        dispatch(function () use ($user) {
+            broadcast(new UserOnlineStatus($user, false));
+        })->onQueue('broadcasts');
+
+        Log::info('User offline status queued for broadcast', ['user_id' => $user->id, 'status' => 'offline']);
 
         return response()->json([
             'success' => true,

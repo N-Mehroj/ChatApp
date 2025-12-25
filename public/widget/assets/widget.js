@@ -166,7 +166,7 @@
         const pollingInterval = ref(null);
         const lastMessageId = ref(0);
         const pollingEnabled = ref(true);
-        const pollingIntervalMs = ref(500); // 500ms - very frequent checking
+        const pollingIntervalMs = ref(2000); // 2s - less frequent when WebSocket is primary
         const websocketConnected = ref(false);
         const useWebsocketFallback = ref(true);
 
@@ -333,7 +333,7 @@
             lastMessageId.value = Math.max(...messages.value.map(m => m.id));
           }
 
-          // Start polling as fallback if WebSocket is not connected after 3 seconds
+          // Start polling as fallback if WebSocket is not connected after 5 seconds
           setTimeout(() => {
             if (!websocketConnected.value && useWebsocketFallback.value) {
               console.log('=== DEBUG: WebSocket not connected, starting polling fallback ===');
@@ -341,7 +341,7 @@
                 await pollForNewMessages();
               }, pollingIntervalMs.value);
             }
-          }, 3000);
+          }, 5000); // Wait longer before fallback
         };
 
         const stopMessagePolling = () => {
