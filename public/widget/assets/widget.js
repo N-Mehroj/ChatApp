@@ -329,10 +329,12 @@
             console.log('=== DEBUG: Session created ===');
             console.log('Chat ID:', data.chat_id);
             console.log('Messages received:', data.messages?.length || 0);
+            console.log('Messages.value length:', messages.value.length);
             console.log('User identified:', data.user?.name || 'No user');
             if (data.messages && data.messages.length > 0) {
               console.log('First message:', data.messages[0]?.message);
               console.log('Last message:', data.messages[data.messages.length - 1]?.message);
+              console.log('All messages:', data.messages.map(m => `${m.is_from_user ? 'User' : 'Support'}: ${m.message}`));
             } else {
               console.log('No messages in response - checking user identification...');
             }
@@ -417,6 +419,36 @@
             }
           } else {
             console.log('ChatWidget SDK not available or no getCurrentUserInfo function');
+          }
+
+          // Check Laravel's global user object (if authenticated)
+          if (window.Laravel && window.Laravel.user) {
+            const laravelUser = {
+              id: window.Laravel.user.id,
+              name: window.Laravel.user.name,
+              email: window.Laravel.user.email,
+              role: window.Laravel.user.role || 'user',
+              isLoggedIn: true
+            };
+            console.log('Using Laravel global user:', laravelUser);
+            return laravelUser;
+          }
+
+          // Check meta tags for user information
+          const userIdMeta = document.querySelector('meta[name="user-id"]');
+          const userNameMeta = document.querySelector('meta[name="user-name"]');
+          const userEmailMeta = document.querySelector('meta[name="user-email"]');
+
+          if (userIdMeta && userIdMeta.content) {
+            const metaUser = {
+              id: parseInt(userIdMeta.content),
+              name: userNameMeta ? userNameMeta.content : null,
+              email: userEmailMeta ? userEmailMeta.content : null,
+              role: 'user',
+              isLoggedIn: true
+            };
+            console.log('Using meta tag user info:', metaUser);
+            return metaUser;
           }
 
           // Fallback to current user value or props
