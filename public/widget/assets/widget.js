@@ -260,6 +260,18 @@
           isOpen.value = !isOpen.value;
           if (isOpen.value) {
             unreadCount.value = 0;
+
+            // DEBUG: Test user ma'lumotlarini o'rnatish
+            console.log('=== DEBUG: Setting test user for demo ===');
+            if (window.ChatWidget) {
+              window.ChatWidget.setUser({
+                id: 1,
+                name: 'admin Doe',
+                email: 'admin@gmail.com',
+                role: 'user'
+              });
+            }
+
             // Check user access permissions when opening chat
             checkUserAccess();
             nextTick(() => {
@@ -273,6 +285,8 @@
           try {
             // Get user info first to pass with session creation
             const userInfo = getCurrentUserInfo();
+            console.log('=== DEBUG: Widget opening ===');
+            console.log('User info detected:', userInfo);
 
             // Prepare session request with user information if available
             const sessionPayload = {
@@ -287,11 +301,14 @@
                 email: userInfo.email,
                 role: userInfo.role
               };
+              console.log('=== DEBUG: Sending user metadata ===', sessionPayload.user_metadata);
+            } else {
+              console.log('=== DEBUG: No user info found, opening as anonymous ===');
             }
 
-            const headers = window.ChatWidget?.getSecureHeaders ?
-              window.ChatWidget.getSecureHeaders() :
-              { 'Content-Type': 'application/json' };
+            const headers = {
+              'Content-Type': 'application/json'
+            };
 
             const response = await fetch(`${props.apiUrl}/session`, {
               method: 'POST',
@@ -309,6 +326,17 @@
             messages.value = data.messages || [];
             supportAgent.value = data.agent || { name: 'Support Team' };
 
+            console.log('=== DEBUG: Session created ===');
+            console.log('Chat ID:', data.chat_id);
+            console.log('Messages received:', data.messages?.length || 0);
+            console.log('User identified:', data.user?.name || 'No user');
+            if (data.messages && data.messages.length > 0) {
+              console.log('First message:', data.messages[0]?.message);
+              console.log('Last message:', data.messages[data.messages.length - 1]?.message);
+            } else {
+              console.log('No messages in response - checking user identification...');
+            }
+
             // Update current user with server response
             if (data.user) {
               currentUser.value = { ...currentUser.value, ...data.user, isLoggedIn: true };
@@ -324,7 +352,7 @@
             } else if (userInfo && userInfo.isLoggedIn && data.user) {
               // User was already identified on server, update local state
               currentUser.value = { ...currentUser.value, ...data.user, isLoggedIn: true };
-              console.log('User already identified on server, loaded', data.messages?.length || 0, 'messages');
+              console.log('User already identified on server, loaded ALL', data.messages?.length || 0, 'messages (complete history)');
             }
 
             // Initialize realtime after session established
@@ -377,16 +405,24 @@
 
         // Get current user information from SDK or default sources
         const getCurrentUserInfo = () => {
+          console.log('=== DEBUG: getCurrentUserInfo called ===');
+
           // Try to get user info from ChatWidget SDK first
           if (window.ChatWidget && typeof window.ChatWidget.getCurrentUserInfo === 'function') {
             const sdkUserInfo = window.ChatWidget.getCurrentUserInfo();
+            console.log('SDK User Info:', sdkUserInfo);
             if (sdkUserInfo && sdkUserInfo.isLoggedIn) {
+              console.log('Using SDK user info:', sdkUserInfo.name || sdkUserInfo.email);
               return sdkUserInfo;
             }
+          } else {
+            console.log('ChatWidget SDK not available or no getCurrentUserInfo function');
           }
 
           // Fallback to current user value or props
-          return currentUser.value.isLoggedIn ? currentUser.value : (props.userInfo || {});
+          const fallback = currentUser.value.isLoggedIn ? currentUser.value : (props.userInfo || {});
+          console.log('Using fallback user info:', fallback);
+          return fallback;
         };
 
         // Reload user's chat history after user identification
@@ -419,8 +455,10 @@
               const data = await response.json();
               if (data.messages && data.messages.length > 0) {
                 messages.value = data.messages;
-                console.log(`Loaded ${data.messages.length} chat messages for user`);
+                console.log(`Loaded ALL ${data.messages.length} chat messages for user (complete history)`);
                 setTimeout(() => scrollToBottom(), 100);
+              } else {
+                console.log('No previous messages found for this user');
               }
             }
           } catch (error) {
@@ -797,7 +835,9 @@
                 </div>
                 <div>
                   <h3 style="font-weight: 500; margin: 0;">Support</h3>
-                  <p style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin: 0;">{{ supportAgent.name || 'Support Team' }}</p>
+                  <p style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin: 0;">
+                    {{ supportAgent.name || 'Support Team' }}<span v-if="messages.length > 0"> • {{ messages.length }} messages</span>
+                  </p>
                 </div>
               </div>
               <button @click="toggleChat" style="color: rgba(255, 255, 255, 0.8); background: none; border: none; cursor: pointer; transition: color 0.3s;">
@@ -821,7 +861,7 @@
                   </svg>
                 </div>
                 <p style="color: #6B7280; font-size: 14px; margin: 0 0 8px;">Welcome to Support!</p>
-                <p style="color: #9CA3AF; font-size: 12px; margin: 0;">Send us a message and we'll get back to you shortly.</p>
+                <p style="color: #9CA3AF; font-size: 12px; margin: 0;">Send us a message and we'll get back to you shortly.<br>All your previous messages are loaded automatically.</p>
               </div>
 
               <!-- Messages -->

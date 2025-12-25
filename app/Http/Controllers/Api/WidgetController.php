@@ -143,10 +143,9 @@ class WidgetController extends Controller
                 ]);
             }
 
-            // Get recent messages
+            // Get all messages (remove limit to show complete chat history)
             $messages = ChatMessage::where('chat_id', $chat->id)
                 ->orderBy('created_at', 'asc')
-                ->limit(50)
                 ->get()
                 ->map(function ($message) use ($merchant) {
                     return [
