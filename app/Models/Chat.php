@@ -24,6 +24,7 @@ class Chat extends Model
     protected $fillable = [
         'user_id',
         'widget_session_id',
+        'visitor_user_id',
         'is_new',
     ];
 

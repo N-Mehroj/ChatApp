@@ -123,30 +123,40 @@ class WidgetController extends Controller
 
             $session = WidgetSession::firstOrCreate($sessionData, $defaultData);
 
-            // Get or create chat - if session has user_id, find by merchant+visitor user, otherwise by session
+            // Get or create THE SINGLE chat for this user-merchant pair
             if ($session->user_id) {
-                // For logged-in users: find or create chat by merchant and visitor user
-                $chat = Chat::firstOrCreate([
-                    'user_id' => $merchant->id,
-                    'visitor_user_id' => $session->user_id,
-                ], [
-                    'widget_session_id' => $session->id, // Always set session ID when creating
+                \Log::info('Widget Session - Creating/finding chat for identified user', [
+                    'session_id' => $session->id,
+                    'session_user_id' => $session->user_id,
+                    'merchant_id' => $merchant->id
                 ]);
+                
+                // For logged-in users: find or create THE ONE chat between merchant and visitor user
+                $chat = Chat::where('user_id', $merchant->id)
+                    ->where('visitor_user_id', $session->user_id)
+                    ->first();
 
-                \Log::info('Widget Session - Chat found/created', [
-                    'chat_id' => $chat->id,
-                    'merchant_id' => $merchant->id,
-                    'visitor_user_id' => $session->user_id,
-                    'was_recently_created' => $chat->wasRecentlyCreated
-                ]);
-
-                // Always ensure this chat is linked to the current session
-                if ($chat->widget_session_id !== $session->id) {
-                    $chat->update(['widget_session_id' => $session->id]);
-                    \Log::info('Chat session link updated', [
+                if (!$chat) {
+                    // Create the first and only chat between this merchant and user
+                    $chat = Chat::create([
+                        'user_id' => $merchant->id,
+                        'visitor_user_id' => $session->user_id,
+                        'widget_session_id' => $session->id,
+                    ]);
+                    \Log::info('Widget Session - Single chat created for user', [
                         'chat_id' => $chat->id,
-                        'old_session_id' => $chat->widget_session_id,
-                        'new_session_id' => $session->id
+                        'merchant_id' => $merchant->id,
+                        'visitor_user_id' => $session->user_id,
+                        'chat_visitor_user_id' => $chat->visitor_user_id,
+                    ]);
+                } else {
+                    // Update existing single chat with current session (for tracking)
+                    $chat->update(['widget_session_id' => $session->id]);
+                    \Log::info('Widget Session - User connected to existing single chat', [
+                        'chat_id' => $chat->id,
+                        'merchant_id' => $merchant->id,
+                        'visitor_user_id' => $session->user_id,
+                        'total_messages' => $chat->messages()->count(),
                     ]);
                 }
             } else {
@@ -246,32 +256,33 @@ class WidgetController extends Controller
                 return response()->json(['error' => 'Invalid session'], 404);
             }
 
-            // Find the chat using the same logic as createSession
+            // Find THE SINGLE chat using the same logic as createSession
             $chat = null;
 
             if ($session->user_id) {
-                // For logged-in users: find by merchant and visitor user
+                // For logged-in users: find THE ONE chat by merchant and visitor user
                 $chat = Chat::where('user_id', $merchant->id)
                     ->where('visitor_user_id', $session->user_id)
                     ->first();
-
-                // If not found, try by widget_session_id as fallback
-                if (!$chat) {
-                    $chat = Chat::where('widget_session_id', $session->id)->first();
-                }
+                    
+                \Log::info('Widget SendMessage - Looking for user chat', [
+                    'merchant_id' => $merchant->id,
+                    'visitor_user_id' => $session->user_id,
+                    'found_chat_id' => $chat ? $chat->id : null
+                ]);
             } else {
                 // For anonymous visitors: find by session
                 $chat = Chat::where('widget_session_id', $session->id)->first();
             }
 
             if (! $chat) {
-                \Log::error('Chat not found for session', [
+                \Log::error('Chat not found for message sending', [
                     'session_id' => $session->id,
                     'session_user_id' => $session->user_id,
                     'merchant_id' => $merchant->id,
                     'request_session_id' => $request->session_id
                 ]);
-                return response()->json(['error' => 'Chat not found'], 404);
+                return response()->json(['error' => 'Chat not found - please refresh the widget'], 404);
             }
 
             // If session is linked to an authenticated user, persist their user_id
