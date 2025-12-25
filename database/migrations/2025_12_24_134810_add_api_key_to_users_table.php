@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('api_key')->nullable()->unique()->after('remember_token');
-        });
+        if (! Schema::hasColumn('users', 'api_key')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('api_key')->nullable()->unique()->after('remember_token');
+            });
+        }
     }
 
     /**
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('api_key');
-        });
+        if (Schema::hasColumn('users', 'api_key')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropColumn('api_key');
+            });
+        }
     }
 };

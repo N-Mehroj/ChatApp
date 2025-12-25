@@ -10,6 +10,7 @@ use App\Models\ChatMessage;
 use App\Models\User;
 use App\Models\WidgetSession;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class WidgetController extends Controller
@@ -65,6 +66,7 @@ class WidgetController extends Controller
      */
     public function createSession(Request $request): \Illuminate\Http\JsonResponse
     {
+
         $request->validate([
             'api_key' => 'required|string',
         ]);
@@ -85,8 +87,20 @@ class WidgetController extends Controller
             $sessionId = $request->session_id ?? Str::uuid();
             $visitorId = $request->visitor_id ?? $request->ip();
 
-            // Check if user is authenticated
+            // Check if user is authenticated or provided via metadata
             $authenticatedUser = auth()->user();
+            $metadataUser = null;
+
+            // Check if user metadata is provided (from widget frontend)
+            if ($request->has('user_metadata') && is_array($request->user_metadata)) {
+                $userMetadata = $request->user_metadata;
+                if (isset($userMetadata['user_id']) && $userMetadata['user_id']) {
+                    $metadataUser = User::find($userMetadata['user_id']);
+                }
+            }
+
+            // Use authenticated user first, then metadata user
+            $currentUser = $authenticatedUser ?: $metadataUser;
 
             $sessionData = [
                 'session_id' => $sessionId,
@@ -100,20 +114,34 @@ class WidgetController extends Controller
                 'is_active' => true,
             ];
 
-            // If user is authenticated, store user info
-            if ($authenticatedUser) {
-                $sessionData['user_id'] = $authenticatedUser->id;
-                $defaultData['visitor_name'] = $authenticatedUser->display_name;
-                $defaultData['visitor_email'] = $authenticatedUser->email;
+            // If user is available (authenticated or from metadata), store user info
+            if ($currentUser) {
+                $sessionData['user_id'] = $currentUser->id;
+                $defaultData['visitor_name'] = $currentUser->display_name;
+                $defaultData['visitor_email'] = $currentUser->email;
             }
 
             $session = WidgetSession::firstOrCreate($sessionData, $defaultData);
 
-            // Get or create chat for this session
-            $chat = Chat::firstOrCreate([
-                'user_id' => $merchant->id,
-                'widget_session_id' => $session->id,
-            ]);
+            // Get or create chat - if session has user_id, find by merchant+visitor user, otherwise by session
+            if ($session->user_id) {
+                // For logged-in users: find or create chat by merchant and visitor user
+                $chat = Chat::firstOrCreate([
+                    'user_id' => $merchant->id,
+                    'visitor_user_id' => $session->user_id,
+                ]);
+
+                // Link this chat to the session if not already linked
+                if (!$chat->widget_session_id) {
+                    $chat->update(['widget_session_id' => $session->id]);
+                }
+            } else {
+                // For anonymous visitors: find or create chat by session
+                $chat = Chat::firstOrCreate([
+                    'user_id' => $merchant->id,
+                    'widget_session_id' => $session->id,
+                ]);
+            }
 
             // Get recent messages
             $messages = ChatMessage::where('chat_id', $chat->id)
@@ -129,23 +157,30 @@ class WidgetController extends Controller
                     ];
                 });
 
+            $reverbOptions = config('broadcasting.connections.reverb.options', []);
+            $reverbScheme = $reverbOptions['scheme'] ?? 'https';
+            $reverbHost = $reverbOptions['host'] ?? '127.0.0.1';
+            $reverbPort = $reverbOptions['port'] ?? ($reverbScheme === 'https' ? 443 : 80);
+            $wsProtocol = $reverbScheme === 'https' ? 'wss' : 'ws';
+
             return response()->json([
                 'session_id' => $sessionId,
                 'chat_id' => $chat->id,
                 'messages' => $messages,
-                'user' => $authenticatedUser ? [
-                    'id' => $authenticatedUser->id,
-                    'name' => $authenticatedUser->display_name,
-                    'email' => $authenticatedUser->email,
-                    'avatar' => $authenticatedUser->avatar_url,
+                'user' => $currentUser ? [
+                    'id' => $currentUser->id,
+                    'name' => $currentUser->display_name,
+                    'email' => $currentUser->email,
+                    'avatar' => $currentUser->avatar_url ?? null,
                 ] : null,
                 'agent' => [
                     'name' => $merchant->name,
                     'avatar' => $merchant->avatar ?? null,
                 ],
                 'config' => [
-                    'ws_url' => config('broadcasting.connections.reverb.url', 'ws://localhost:8080'),
-                    'app_key' => config('broadcasting.connections.reverb.app_key'),
+                    'ws_url' => sprintf('%s://%s:%s', $wsProtocol, $reverbHost, $reverbPort),
+                    'app_key' => config('broadcasting.connections.reverb.key')
+                        ?? config('broadcasting.connections.pusher.key'),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -193,10 +228,10 @@ class WidgetController extends Controller
                 return response()->json(['error' => 'Chat not found'], 404);
             }
 
-            // Create message from visitor
+            // If session is linked to an authenticated user, persist their user_id
             $message = ChatMessage::create([
                 'chat_id' => $chat->id,
-                'user_id' => null, // Widget visitor
+                'user_id' => $session->user_id, // null for anonymous visitors, user_id when identified
                 'message' => $request->message,
                 'widget_session_id' => $session->id,
             ]);
@@ -521,13 +556,17 @@ class WidgetController extends Controller
                 return response()->json(['error' => 'Session not found'], 404);
             }
 
-            // Update session with user details
+            $identifiedUserId = $request->user()?->id
+                ?? ($request->metadata['user_id'] ?? null);
+
+            // Update session with user details and attach user_id when available
             $session->update([
                 'visitor_name' => $request->name,
                 'visitor_email' => $request->email,
                 'visitor_phone' => $request->phone,
                 'visitor_notes' => $request->notes,
                 'visitor_metadata' => $request->metadata,
+                'user_id' => $identifiedUserId ?? $session->user_id,
                 'last_activity' => now(),
             ]);
 

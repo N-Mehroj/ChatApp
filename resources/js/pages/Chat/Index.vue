@@ -56,16 +56,15 @@
       <!-- Chat List -->
       <div class="flex-1 overflow-y-auto">
         <!-- Loading indicator for chat list -->
-        <div 
-          v-if="isLoading" 
-          class="p-4 border-b border-gray-200 dark:border-gray-700"
-        >
+        <div v-if="isLoading" class="p-4 border-b border-gray-200 dark:border-gray-700">
           <div class="flex items-center justify-center space-x-2 text-sm text-gray-500">
-            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+            <div
+              class="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"
+            ></div>
             <span>Chatlar yuklanmoqda...</span>
           </div>
         </div>
-        
+
         <div v-if="chatList.length === 0 && !isLoading" class="p-8 text-center">
           <div class="text-gray-400 mb-2">
             <svg
@@ -146,8 +145,13 @@
               </div>
             </div>
             <!-- Widget user info -->
-            <div v-if="chat.is_widget_chat && (chat.visitor_email || chat.visitor_phone)" class="mb-1">
-              <div class="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+            <div
+              v-if="chat.is_widget_chat && (chat.visitor_email || chat.visitor_phone)"
+              class="mb-1"
+            >
+              <div
+                class="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400"
+              >
                 <span v-if="chat.visitor_email">{{ chat.visitor_email }}</span>
                 <span v-if="chat.visitor_phone">{{ chat.visitor_phone }}</span>
               </div>
@@ -320,25 +324,27 @@
 
       <div v-else class="flex-1 flex flex-col h-full max-h-screen overflow-hidden">
         <!-- Loading and Connection Status Bar -->
-        <div 
-          v-if="loadingStage || channelStatus || isLoadingMessages || isConnectingChannels" 
+        <div
+          v-if="
+            loadingStage || channelStatus || isLoadingMessages || isConnectingChannels
+          "
           class="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-700 p-2"
         >
           <div class="flex items-center justify-center space-x-2 text-sm">
             <!-- Loading Spinner -->
-            <div 
+            <div
               v-if="isLoadingMessages || isConnectingChannels"
               class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"
             ></div>
-            
+
             <!-- Status Text -->
             <span class="text-blue-700 dark:text-blue-300">
-              {{ loadingStage || channelStatus || 'Yuklanmoqda...' }}
+              {{ loadingStage || channelStatus || "Yuklanmoqda..." }}
             </span>
-            
+
             <!-- Connected Channels Count -->
-            <span 
-              v-if="connectedChannels.size > 0" 
+            <span
+              v-if="connectedChannels.size > 0"
               class="bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100 px-2 py-1 rounded-full text-xs"
             >
               {{ connectedChannels.size }} kanal ulandi
@@ -492,12 +498,13 @@
           }"
         >
           <!-- Loading Messages Indicator -->
-          <div 
-            v-if="isLoadingMessages" 
-            class="text-center py-8"
-          >
-            <div class="inline-flex items-center space-x-2 text-gray-500 dark:text-gray-400">
-              <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+          <div v-if="isLoadingMessages" class="text-center py-8">
+            <div
+              class="inline-flex items-center space-x-2 text-gray-500 dark:text-gray-400"
+            >
+              <div
+                class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"
+              ></div>
               <span class="text-sm">Xabarlar yuklanmoqda...</span>
             </div>
           </div>
@@ -549,35 +556,35 @@
                 "
               >
                 <!-- Sender Info for received messages -->
-                <div 
-                  v-if="message.user_id !== user.id" 
+                <div
+                  v-if="message.user_id !== user.id"
                   class="px-3 pt-2 pb-1 border-b border-gray-200 dark:border-gray-600"
                 >
                   <div class="flex items-center justify-between text-xs">
                     <span class="font-medium text-gray-600 dark:text-gray-300">
                       {{ getUserDisplayName(message.user) }}
                     </span>
-                    <span 
-                      v-if="message.from_operator" 
+                    <span
+                      v-if="message.from_operator"
                       class="bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full text-xs font-medium"
                     >
                       Support
                     </span>
-                    <span 
-                      v-else-if="message.user.role" 
+                    <span
+                      v-else-if="message.user?.role"
                       class="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-xs capitalize"
                     >
                       {{ message.user.role }}
                     </span>
                   </div>
                 </div>
-                
+
                 <div class="px-3 py-2">
                   <p class="text-sm sm:text-base leading-relaxed break-words">
                     {{ message.message }}
                   </p>
                 </div>
-                
+
                 <div class="flex items-center justify-end px-3 pb-2 gap-1">
                   <span
                     class="text-xs"
@@ -904,8 +911,8 @@ const activeChannel = ref(null); // Track current active channel for cleanup
 const isLoadingMessages = ref(false);
 const isConnectingChannels = ref(false);
 const connectedChannels = ref(new Set());
-const channelStatus = ref('');
-const loadingStage = ref('');
+const channelStatus = ref("");
+const loadingStage = ref("");
 
 // Computed
 const page = usePage();
@@ -918,38 +925,38 @@ const loadChatMessages = async (chat) => {
   if (!chat) return;
 
   isLoadingMessages.value = true;
-  loadingStage.value = 'Xabarlar yuklanmoqda...';
-  
+  loadingStage.value = "Xabarlar yuklanmoqda...";
+
   try {
     const response = await axios.get(`/chat/${chat.id}/messages`);
     currentChatMessages.value = response.data.messages;
-    loadingStage.value = 'Xabarlar yuklandi';
+    loadingStage.value = "Xabarlar yuklandi";
     await nextTick();
     scrollToBottom();
   } catch (error) {
     console.error("Xabarlarni yuklashda xato:", error);
-    loadingStage.value = 'Xabarlarni yuklashda xato!';
+    loadingStage.value = "Xabarlarni yuklashda xato!";
   } finally {
     isLoadingMessages.value = false;
-    setTimeout(() => loadingStage.value = '', 2000);
+    setTimeout(() => (loadingStage.value = ""), 2000);
   }
 };
 
 // Select chat
 const selectChat = async (chat) => {
-  loadingStage.value = 'Chat tanlanmoqda...';
-  
+  loadingStage.value = "Chat tanlanmoqda...";
+
   // Clean up only the previous active channel (preserve global listeners)
   cleanupActiveChannel();
   selectedChat.value = chat;
-  
-  loadingStage.value = 'Xabarlar yuklanmoqda...';
+
+  loadingStage.value = "Xabarlar yuklanmoqda...";
   await loadChatMessages(chat);
 
   // Clear unread count for the selected chat using helper function
   resetUnreadCount(chat.id);
 
-  loadingStage.value = 'Xabarlar o\'qilgan deb belgilanmoqda...';
+  loadingStage.value = "Xabarlar o'qilgan deb belgilanmoqda...";
   // Mark messages as read
   try {
     await axios.post(`/chat/${chat.id}/mark-read`);
@@ -959,7 +966,7 @@ const selectChat = async (chat) => {
   }
 
   // Setup real-time messaging for the new chat
-  loadingStage.value = 'WebSocket ulanmoqda...';
+  loadingStage.value = "WebSocket ulanmoqda...";
   setupEcho();
 };
 
@@ -1202,7 +1209,7 @@ const getUserDisplayName = (user) => {
 
 const getChatDisplayName = (chat) => {
   if (!chat) return "Suhbat";
-  
+
   // Widget chat bo'lsa
   if (chat.is_widget_chat) {
     if (chat.widget_user) {
@@ -1219,7 +1226,7 @@ const getChatDisplayName = (chat) => {
 
   // Oddiy chat
   if (!chat.user) return "Suhbat";
-  
+
   // For support tickets, always show the customer (chat.user)
   const customer = chat.user;
   return getUserDisplayName(customer);
@@ -1292,10 +1299,10 @@ const setupEcho = () => {
   }
 
   const channelName = `chat.${selectedChat.value.id}`;
-  
+
   isConnectingChannels.value = true;
   channelStatus.value = `Kanal ulanmoqda: ${channelName}`;
-  loadingStage.value = 'WebSocket kanali ulanmoqda...';
+  loadingStage.value = "WebSocket kanali ulanmoqda...";
 
   // Clean up previous active channel
   if (activeChannel.value && activeChannel.value !== channelName) {
@@ -1404,24 +1411,24 @@ const setupEcho = () => {
       connectedChannels.value.add(channelName);
       isConnectingChannels.value = false;
       channelStatus.value = `Ulandi: ${channelName}`;
-      loadingStage.value = 'Kanal muvaffaqiyatli ulandí';
-      
+      loadingStage.value = "Kanal muvaffaqiyatli ulandí";
+
       // Clear status after 2 seconds
       setTimeout(() => {
-        channelStatus.value = '';
-        loadingStage.value = '';
+        channelStatus.value = "";
+        loadingStage.value = "";
       }, 2000);
     })
     .error((error) => {
       console.error(`❌ Subscription error for ${channelName}:`, error);
       isConnectingChannels.value = false;
       channelStatus.value = `Xato: ${channelName}`;
-      loadingStage.value = 'Kanal ulanishida xato!';
-      
+      loadingStage.value = "Kanal ulanishida xato!";
+
       // Clear error after 3 seconds
       setTimeout(() => {
-        channelStatus.value = '';
-        loadingStage.value = '';
+        channelStatus.value = "";
+        loadingStage.value = "";
       }, 3000);
     });
 };
@@ -1464,12 +1471,12 @@ const cleanupAllChannels = () => {
 // Setup global Echo listeners for chat notifications
 const setupGlobalEcho = () => {
   console.log("🌍 setupGlobalEcho called - setting up background listeners");
-  
-  channelStatus.value = 'Global kanallar ulanmoqda...';
+
+  channelStatus.value = "Global kanallar ulanmoqda...";
 
   if (!window.Echo) {
     console.error("❌ Echo not available for global setup");
-    channelStatus.value = 'Echo mavjud emas!';
+    channelStatus.value = "Echo mavjud emas!";
     return;
   }
 
@@ -1511,11 +1518,11 @@ const setupGlobalEcho = () => {
         .subscribed(() => {
           console.log(`✅ Background subscription active for chat ${chat.id}`);
           connectedChannels.value.add(`chat.${chat.id}`);
-          
+
           // Update status when all chats are connected
           if (connectedChannels.value.size > 0) {
             channelStatus.value = `${connectedChannels.value.size} chat kanali ulandi`;
-            setTimeout(() => channelStatus.value = '', 3000);
+            setTimeout(() => (channelStatus.value = ""), 3000);
           }
         })
         .error((error) => {

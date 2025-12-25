@@ -175,17 +175,43 @@
                 role: null,
                 id: null,
                 name: null,
+                first_name: null,
+                last_name: null,
                 email: null,
+                phone: null,
                 csrfToken: null
             };
 
-            // Method 1: Check for Laravel's global user data
+            // Method 1: Check for custom user data (set programmatically)
+            if (this.config.user.customUserData && Object.keys(this.config.user.customUserData).length > 0) {
+                const customData = this.config.user.customUserData;
+                userInfo = {
+                    isLoggedIn: !!(customData.id || customData.email),
+                    id: customData.id,
+                    name: customData.name || customData.display_name || `${customData.first_name || ''} ${customData.last_name || ''}`.trim(),
+                    first_name: customData.first_name,
+                    last_name: customData.last_name,
+                    email: customData.email,
+                    phone: customData.phone,
+                    role: customData.role,
+                    csrfToken: this.getCSRFToken()
+                };
+                if (userInfo.isLoggedIn) {
+                    this.log('User detected from custom data:', userInfo.name || userInfo.email);
+                    return userInfo;
+                }
+            }
+
+            // Method 2: Check for Laravel's global user data
             if (window.Laravel && window.Laravel.user) {
                 userInfo = {
                     isLoggedIn: true,
                     id: window.Laravel.user.id,
-                    name: window.Laravel.user.name,
+                    name: window.Laravel.user.name || window.Laravel.user.display_name,
+                    first_name: window.Laravel.user.first_name,
+                    last_name: window.Laravel.user.last_name,
                     email: window.Laravel.user.email,
+                    phone: window.Laravel.user.phone,
                     role: window.Laravel.user.role,
                     csrfToken: window.Laravel.csrfToken || this.getCSRFToken()
                 };
@@ -193,14 +219,20 @@
                 return userInfo;
             }
 
-            // Method 2: Check for meta tags (common Laravel pattern)
+            // Method 3: Check for meta tags (common Laravel pattern)
             const userMeta = document.querySelector('meta[name="user-info"]');
             if (userMeta) {
                 try {
                     const userData = JSON.parse(userMeta.getAttribute('content'));
                     userInfo = {
                         isLoggedIn: true,
-                        ...userData,
+                        id: userData.id,
+                        name: userData.name || userData.display_name || `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+                        first_name: userData.first_name,
+                        last_name: userData.last_name,
+                        email: userData.email,
+                        phone: userData.phone,
+                        role: userData.role,
                         csrfToken: this.getCSRFToken()
                     };
                     this.log('User detected from meta tag:', userInfo.name);
@@ -210,13 +242,14 @@
                 }
             }
 
-            // Method 3: Check for auth cookies/session indicators
+            // Method 4: Check for auth cookies/session indicators
             if (this.hasAuthSession()) {
                 // If we detect auth but no user data, fetch from backend
                 if (this.config.user.autoDetect) {
                     this.fetchUserInfo().then(info => {
                         if (info) {
-                            // Update the widget with user info
+                            // Update custom user data and trigger widget update
+                            this.config.user.customUserData = { ...this.config.user.customUserData, ...info };
                             this.updateUserInfo(info);
                         }
                     });
@@ -327,9 +360,21 @@
 
         // Set user information manually
         setUser: function (userInfo) {
-            this.config.user.customUserData = { ...this.config.user.customUserData, ...userInfo };
-            this.updateUserInfo(userInfo);
-            this.log('User info set manually:', userInfo.name || userInfo.id);
+            // Normalize user info
+            const normalizedUserInfo = {
+                ...userInfo,
+                isLoggedIn: !!(userInfo.id || userInfo.email),
+                name: userInfo.name || userInfo.display_name || `${userInfo.first_name || ''} ${userInfo.last_name || ''}`.trim()
+            };
+
+            this.config.user.customUserData = { ...this.config.user.customUserData, ...normalizedUserInfo };
+            this.updateUserInfo(normalizedUserInfo);
+            this.log('User info set manually:', normalizedUserInfo.name || normalizedUserInfo.email || normalizedUserInfo.id);
+
+            // Trigger widget to reload user chats if it's already initialized
+            if (window.ChatWidgetComponent && window.ChatWidgetComponent.updateUser) {
+                window.ChatWidgetComponent.updateUser(normalizedUserInfo);
+            }
         },
 
         // Get secure headers for API requests

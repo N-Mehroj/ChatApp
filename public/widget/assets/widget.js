@@ -271,14 +271,33 @@
 
         const initializeSession = async () => {
           try {
+            // Get user info first to pass with session creation
+            const userInfo = getCurrentUserInfo();
+
+            // Prepare session request with user information if available
+            const sessionPayload = {
+              api_key: props.apiKey
+            };
+
+            // Add user information to session request for better user identification
+            if (userInfo && userInfo.isLoggedIn) {
+              sessionPayload.user_metadata = {
+                user_id: userInfo.id,
+                name: userInfo.name,
+                email: userInfo.email,
+                role: userInfo.role
+              };
+            }
+
+            const headers = window.ChatWidget?.getSecureHeaders ?
+              window.ChatWidget.getSecureHeaders() :
+              { 'Content-Type': 'application/json' };
+
             const response = await fetch(`${props.apiUrl}/session`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                api_key: props.apiKey
-              })
+              headers: headers,
+              credentials: 'same-origin', // Include session cookies
+              body: JSON.stringify(sessionPayload)
             });
 
             if (!response.ok) {
@@ -290,8 +309,23 @@
             messages.value = data.messages || [];
             supportAgent.value = data.agent || { name: 'Support Team' };
 
-            // Link logged-in user to this session
-            await identifyCurrentUser();
+            // Update current user with server response
+            if (data.user) {
+              currentUser.value = { ...currentUser.value, ...data.user, isLoggedIn: true };
+            }
+
+            // If we have user info but session creation didn't identify user, identify now
+            if (userInfo && userInfo.isLoggedIn && !data.user) {
+              const identified = await identifyCurrentUser();
+              // After identifying, reload session to get user's chat history
+              if (identified) {
+                await reloadUserChats();
+              }
+            } else if (userInfo && userInfo.isLoggedIn && data.user) {
+              // User was already identified on server, update local state
+              currentUser.value = { ...currentUser.value, ...data.user, isLoggedIn: true };
+              console.log('User already identified on server, loaded', data.messages?.length || 0, 'messages');
+            }
 
             // Initialize realtime after session established
             await initRealtime(data.config || {});
@@ -335,7 +369,63 @@
           currentUser.value = { ...currentUser.value, ...userInfo };
           // Recheck access permissions when user changes
           checkUserAccess();
-          identifyCurrentUser();
+          // When user info changes, identify user and reload their chats
+          identifyCurrentUser().then(() => {
+            reloadUserChats();
+          });
+        };
+
+        // Get current user information from SDK or default sources
+        const getCurrentUserInfo = () => {
+          // Try to get user info from ChatWidget SDK first
+          if (window.ChatWidget && typeof window.ChatWidget.getCurrentUserInfo === 'function') {
+            const sdkUserInfo = window.ChatWidget.getCurrentUserInfo();
+            if (sdkUserInfo && sdkUserInfo.isLoggedIn) {
+              return sdkUserInfo;
+            }
+          }
+
+          // Fallback to current user value or props
+          return currentUser.value.isLoggedIn ? currentUser.value : (props.userInfo || {});
+        };
+
+        // Reload user's chat history after user identification
+        const reloadUserChats = async () => {
+          if (!sessionId.value) return;
+
+          try {
+            const userInfo = getCurrentUserInfo();
+            if (!userInfo || !userInfo.isLoggedIn) return;
+
+            console.log('Reloading user chats for:', userInfo.name || userInfo.id);
+
+            const headers = window.ChatWidget?.getSecureHeaders ?
+              window.ChatWidget.getSecureHeaders() :
+              { 'Content-Type': 'application/json' };
+
+            // Call session endpoint again to get user's chat history
+            const response = await fetch(`${props.apiUrl}/session`, {
+              method: 'POST',
+              headers: headers,
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                api_key: props.apiKey,
+                session_id: sessionId.value, // Use existing session ID
+                force_user_reload: true // Flag to force user chat loading
+              })
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.messages && data.messages.length > 0) {
+                messages.value = data.messages;
+                console.log(`Loaded ${data.messages.length} chat messages for user`);
+                setTimeout(() => scrollToBottom(), 100);
+              }
+            }
+          } catch (error) {
+            console.warn('Failed to reload user chats (non-blocking):', error);
+          }
         };
 
         // Make updateUser available globally for SDK
@@ -435,7 +525,7 @@
         // Identify the current user (logged-in or provided by SDK) and attach to session
         async function identifyCurrentUser() {
           if (!userConfig.sendToBackend || !sessionId.value) {
-            return;
+            return false;
           }
 
           const info = window.ChatWidget?.getCurrentUserInfo
@@ -444,8 +534,10 @@
 
           // If no useful info, skip
           if (!info || (!info.isLoggedIn && !info.email && !info.name)) {
-            return;
+            return false;
           }
+
+          console.log('Identifying user:', info.name || info.email || info.id);
 
           const payload = {
             api_key: props.apiKey,
@@ -469,15 +561,25 @@
                 Accept: 'application/json',
               };
 
-
-            await fetch(`${props.apiUrl}/identify-user`, {
+            const response = await fetch(`${props.apiUrl}/identify-user`, {
               method: 'POST',
               headers,
               credentials: 'same-origin',
               body: JSON.stringify(payload),
             });
+
+            if (response.ok) {
+              // Update current user info
+              currentUser.value = { ...currentUser.value, ...info, isLoggedIn: true };
+              console.log('User identified successfully, loading chat history...');
+              return true;
+            } else {
+              console.warn('User identification failed:', response.status);
+              return false;
+            }
           } catch (error) {
             console.warn('User identification failed (non-blocking):', error);
+            return false;
           }
         }
 
