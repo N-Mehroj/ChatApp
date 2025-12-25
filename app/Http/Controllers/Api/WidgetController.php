@@ -246,13 +246,13 @@ class WidgetController extends Controller
 
             // Find the chat using the same logic as createSession
             $chat = null;
-            
+
             if ($session->user_id) {
                 // For logged-in users: find by merchant and visitor user
                 $chat = Chat::where('user_id', $merchant->id)
                     ->where('visitor_user_id', $session->user_id)
                     ->first();
-                
+
                 // If not found, try by widget_session_id as fallback
                 if (!$chat) {
                     $chat = Chat::where('widget_session_id', $session->id)->first();

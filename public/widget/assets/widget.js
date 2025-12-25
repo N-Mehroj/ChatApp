@@ -284,7 +284,7 @@
         const initializeSession = async () => {
           try {
             console.log('=== DEBUG: initializeSession starting ===');
-            
+
             // Get user info first to pass with session creation
             const userInfo = getCurrentUserInfo();
             console.log('=== DEBUG: Widget opening ===');
@@ -332,7 +332,7 @@
 
             const data = await response.json();
             console.log('=== DEBUG: Full API response ===', data);
-            
+
             sessionId.value = data.session_id;
             console.log('=== DEBUG: Session ID set to:', sessionId.value);
 
@@ -669,7 +669,7 @@
                 from_operator: data.message.from_operator || false,
                 created_at: data.message.created_at || userMessage.created_at
               };
-              
+
               console.log('=== DEBUG: Updating message at index', messageIndex, 'with:', updatedMessage);
               messages.value[messageIndex] = updatedMessage;
             } else if (messageIndex === -1) {
@@ -685,13 +685,13 @@
               message: error.message,
               stack: error.stack
             });
-            
+
             // Remove the failed message from array
             const failedMessageIndex = messages.value.findIndex(m => m.id === userMessage.id);
             if (failedMessageIndex !== -1) {
               messages.value.splice(failedMessageIndex, 1);
             }
-            
+
             // Add error message
             messages.value.push({
               id: Date.now() + 1,
@@ -1138,11 +1138,11 @@
             userConfig: window.ChatWidget?.config?.user || {},
             userInfo: window.ChatWidget?.getCurrentUserInfo ? window.ChatWidget.getCurrentUserInfo() : {}
           };
-          
+
           console.log('=== DEBUG: Widget config data ===', configData);
           console.log('=== DEBUG: window.ChatWidget ===', window.ChatWidget);
           console.log('=== DEBUG: window.ChatWidget.config ===', window.ChatWidget?.config);
-          
+
           return configData;
         }
       });
