@@ -179,8 +179,8 @@ class WidgetController extends Controller
             ]);
 
             // WebSocket/Reverb configuration
-            $reverbHost = config('reverb.servers.reverb.host', '127.0.0.1');
-            $reverbPort = config('reverb.servers.reverb.port', 8080);
+            $reverbHost = env('REVERB_HOST', '127.0.0.1');
+            $reverbPort = env('REVERB_PORT', 8080);
             $reverbKey = config('broadcasting.connections.reverb.key') ?? env('REVERB_APP_KEY');
             $reverbScheme = env('REVERB_SCHEME', 'http');
             $wsProtocol = $reverbScheme === 'https' ? 'wss' : 'ws';

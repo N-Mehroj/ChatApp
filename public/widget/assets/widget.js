@@ -120,6 +120,36 @@
 
         const isOpen = ref(false);
         const messages = ref([]);
+
+        // WebSocket debugging helper
+        const debugWebSocketMessage = (source, payload) => {
+          console.log(`=== DEBUG: *** ${source.toUpperCase()} MESSAGE RECEIVED *** ===`);
+          console.log('=== DEBUG: Full payload ===', JSON.stringify(payload, null, 2));
+          console.log('=== DEBUG: Payload type ===', typeof payload);
+          console.log('=== DEBUG: Payload keys ===', Object.keys(payload || {}));
+          console.log('=== DEBUG: Current messages count ===', messages.value.length);
+
+          if (payload && payload.message) {
+            console.log('=== DEBUG: Message found ===', payload.message);
+            return true;
+          } else {
+            console.log('=== DEBUG: ❌ NO MESSAGE OBJECT IN PAYLOAD ===');
+            return false;
+          }
+        };
+
+        // Debug message array changes
+        const originalPush = messages.value.push;
+        Object.defineProperty(messages.value, 'push', {
+          value: function (...args) {
+            console.log('=== DEBUG: 📝 MESSAGES ARRAY PUSH ===', args);
+            console.log('=== DEBUG: Current length before push:', this.length);
+            const result = originalPush.apply(this, args);
+            console.log('=== DEBUG: New length after push:', this.length);
+            return result;
+          },
+          writable: true
+        });
         const newMessage = ref('');
         const sending = ref(false);
         const canSendMessages = ref(true);
@@ -131,6 +161,14 @@
         const sessionId = ref(null);
         const lastTypingTime = ref(0);
         const typingTimeout = ref(null);
+
+        // Polling variables
+        const pollingInterval = ref(null);
+        const lastMessageId = ref(0);
+        const pollingEnabled = ref(true);
+        const pollingIntervalMs = ref(500); // 500ms - very frequent checking
+        const websocketConnected = ref(false);
+        const useWebsocketFallback = ref(true);
 
         // Demo mode only when explicit demo key is provided
         const isDemoMode = props.apiKey === 'demo_key';
@@ -278,6 +316,116 @@
               scrollToBottom();
               initializeSession();
             });
+          } else {
+            // Stop polling when widget is closed
+            stopMessagePolling();
+          }
+        };
+
+        // Message polling functions
+        const startMessagePolling = () => {
+          if (!pollingEnabled.value) return;
+
+          console.log('=== DEBUG: Starting message polling every', pollingIntervalMs.value, 'ms ===');
+
+          // Update last message ID for comparison
+          if (messages.value.length > 0) {
+            lastMessageId.value = Math.max(...messages.value.map(m => m.id));
+          }
+
+          // Start polling as fallback if WebSocket is not connected after 3 seconds
+          setTimeout(() => {
+            if (!websocketConnected.value && useWebsocketFallback.value) {
+              console.log('=== DEBUG: WebSocket not connected, starting polling fallback ===');
+              pollingInterval.value = setInterval(async () => {
+                await pollForNewMessages();
+              }, pollingIntervalMs.value);
+            }
+          }, 3000);
+        };
+
+        const stopMessagePolling = () => {
+          if (pollingInterval.value) {
+            console.log('=== DEBUG: Stopping message polling ===');
+            clearInterval(pollingInterval.value);
+            pollingInterval.value = null;
+          }
+          websocketConnected.value = false;
+        };
+
+        const pollForNewMessages = async () => {
+          if (!sessionId.value) return;
+
+          try {
+            console.log('=== DEBUG: Polling for new messages ===');
+
+            // Re-initialize session to get fresh messages
+            const userInfo = getCurrentUserInfo();
+            const sessionPayload = {
+              api_key: props.apiKey
+            };
+
+            if (userInfo && userInfo.isLoggedIn) {
+              sessionPayload.user_metadata = {
+                user_id: userInfo.id,
+                name: userInfo.name,
+                email: userInfo.email,
+                role: userInfo.role
+              };
+            }
+
+            const response = await fetch(`/api/widget/session`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(sessionPayload)
+            });
+
+            // if (!response.ok) {
+            //   // console.warn('Failed to poll messages:', response.status);
+            //   return;
+            // }
+
+            const data = await response.json();
+
+            if (data.messages && Array.isArray(data.messages)) {
+              const newMessages = data.messages.filter(msg =>
+                msg && typeof msg === 'object' && msg.id && msg.id > lastMessageId.value
+              );
+
+              if (newMessages.length > 0) {
+                console.log('=== DEBUG: Found', newMessages.length, 'new messages via polling ===');
+
+                // Add new messages
+                newMessages.forEach(msg => {
+                  const formattedMessage = {
+                    id: msg.id,
+                    message: msg.message || '',
+                    from_operator: Boolean(msg.from_operator),
+                    created_at: msg.created_at || new Date().toISOString()
+                  };
+
+                  // Check if message doesn't already exist
+                  const exists = messages.value.find(m => m.id === msg.id);
+                  if (!exists) {
+                    console.log('=== DEBUG: Adding new polling message ===', formattedMessage);
+                    messages.value.push(formattedMessage);
+
+                    // Update unread count if widget is closed
+                    if (!isOpen.value) {
+                      unreadCount.value++;
+                    }
+                  }
+                });
+
+                // Update last message ID
+                lastMessageId.value = Math.max(...data.messages.map(m => m.id));
+
+                // Scroll to bottom
+                setTimeout(() => scrollToBottom(), 100);
+              }
+            }
+          } catch (error) {
+            console.warn('Message polling failed (non-blocking):', error);
           }
         };
 
@@ -384,6 +532,9 @@
 
             // Initialize realtime after session established
             await initRealtime(data.config || {});
+
+            // Start message polling as fallback
+            startMessagePolling();
 
             setTimeout(() => scrollToBottom(), 100);
           } catch (error) {
@@ -523,11 +674,29 @@
           }
         };
 
-        // Make updateUser available globally for SDK
+        // Update/refresh widget data
+        const updateWidget = async () => {
+          console.log('=== DEBUG: Updating widget data ===');
+
+          try {
+            // Stop current polling
+            stopMessagePolling();
+
+            // Re-initialize session to get fresh data
+            await initializeSession();
+
+            console.log('=== DEBUG: Widget updated successfully ===');
+          } catch (error) {
+            console.error('=== DEBUG: Failed to update widget ===', error);
+          }
+        };
+
+        // Make updateUser and updateWidget available globally for SDK
         if (!window.ChatWidgetComponent) {
           window.ChatWidgetComponent = {};
         }
         window.ChatWidgetComponent.updateUser = updateUser;
+        window.ChatWidgetComponent.updateWidget = updateWidget;
 
         const sendMessage = async () => {
           console.log('=== DEBUG: sendMessage called ===');
@@ -827,8 +996,42 @@
             await loadScript('https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js');
 
             console.log('=== DEBUG: Scripts loaded, creating Echo instance ===');
+            console.log('=== DEBUG: Available constructors ===', {
+              Echo: typeof window.Echo,
+              LaravelEcho: typeof window.LaravelEcho,
+              Pusher: typeof window.Pusher
+            });
 
-            echoInstance = new window.Echo({
+            // Check what's actually available in window.Echo
+            if (window.Echo) {
+              console.log('=== DEBUG: window.Echo properties ===', Object.keys(window.Echo));
+            }
+
+            // Laravel Echo IIFE might expose the constructor differently
+            let EchoConstructor;
+            if (window.LaravelEcho && typeof window.LaravelEcho === 'function') {
+              EchoConstructor = window.LaravelEcho;
+            } else if (window.Echo && typeof window.Echo === 'function') {
+              EchoConstructor = window.Echo;
+            } else if (window.Echo && window.Echo.default && typeof window.Echo.default === 'function') {
+              EchoConstructor = window.Echo.default;
+            } else if (window.Echo && window.Echo.Echo && typeof window.Echo.Echo === 'function') {
+              EchoConstructor = window.Echo.Echo;
+            } else {
+              throw new Error('Laravel Echo constructor not found');
+            }
+
+            console.log('=== DEBUG: Using EchoConstructor ===', typeof EchoConstructor);
+            console.log('=== DEBUG: Attempting to create Echo instance with config ===', {
+              broadcaster: 'reverb',
+              key: appKey,
+              wsHost,
+              wsPort,
+              wssPort: wsPort,
+              forceTLS
+            });
+
+            echoInstance = new EchoConstructor({
               broadcaster: 'reverb',
               key: appKey,
               wsHost,
@@ -841,20 +1044,49 @@
 
             console.log('=== DEBUG: Echo instance created ===', echoInstance);
 
+            // Set connection timeout
+            let connectionTimeout = setTimeout(() => {
+              if (!websocketConnected.value) {
+                console.log('=== DEBUG: WebSocket connection timeout after 5 seconds ===');
+                websocketConnected.value = false;
+              }
+            }, 5000);
+
             // Listen for connection events
             if (window.Pusher && echoInstance.connector && echoInstance.connector.pusher) {
               const pusher = echoInstance.connector.pusher;
 
               pusher.connection.bind('connected', () => {
                 console.log('=== DEBUG: WebSocket connected successfully ===');
+                console.log('=== DEBUG: Connection state:', pusher.connection.state);
+                console.log('=== DEBUG: Socket ID:', pusher.connection.socket_id);
+                websocketConnected.value = true;
+                clearTimeout(connectionTimeout);
+                // Stop polling if WebSocket connects
+                if (pollingInterval.value) {
+                  clearInterval(pollingInterval.value);
+                  pollingInterval.value = null;
+                  console.log('=== DEBUG: Stopped polling fallback, WebSocket is active ===');
+                }
               });
 
               pusher.connection.bind('disconnected', () => {
                 console.log('=== DEBUG: WebSocket disconnected ===');
+                websocketConnected.value = false;
+                clearTimeout(connectionTimeout);
+                // Start polling fallback when WebSocket disconnects
+                if (useWebsocketFallback.value && !pollingInterval.value) {
+                  console.log('=== DEBUG: WebSocket disconnected, starting polling fallback ===');
+                  pollingInterval.value = setInterval(async () => {
+                    await pollForNewMessages();
+                  }, pollingIntervalMs.value);
+                }
               });
 
               pusher.connection.bind('error', (error) => {
                 console.error('=== DEBUG: WebSocket connection error ===', error);
+                websocketConnected.value = false;
+                clearTimeout(connectionTimeout);
               });
             }
 
@@ -862,55 +1094,170 @@
             if (chatId) {
               console.log('=== DEBUG: Subscribing to chat channel ===', `chat.${chatId}`);
 
-              echoInstance.channel(`chat.${chatId}`)
-                .listen('.MessageSent', (payload) => {
-                  console.log('=== DEBUG: New message received via WebSocket ===', payload);
-                  if (payload && payload.message) {
-                    const newMessage = {
-                      id: payload.message.id,
-                      message: payload.message.message,
-                      from_operator: payload.message.from_operator,
-                      created_at: payload.message.created_at
-                    };
+              const chatChannel = echoInstance.channel(`chat.${chatId}`);
+
+              chatChannel.subscribed(() => {
+                console.log('=== DEBUG: ✅ Successfully subscribed to chat channel ===');
+                console.log('=== DEBUG: Chat channel object:', chatChannel);
+                console.log('=== DEBUG: Listening for: message.sent ===');
+              });
+
+              chatChannel.error((error) => {
+                console.error('=== DEBUG: Chat channel subscription error ===', error);
+              });
+
+              chatChannel.listen('message.sent', (payload) => {
+                if (debugWebSocketMessage('CHAT CHANNEL', payload)) {
+                  const newMessage = {
+                    id: payload.message.id,
+                    message: payload.message.message,
+                    from_operator: Boolean(payload.message.from_operator),
+                    created_at: payload.message.created_at
+                  };
+
+                  console.log('=== DEBUG: Formatted new message ===', newMessage);
+
+                  // Check if message doesn't already exist
+                  const exists = messages.value.find(m => m.id === newMessage.id);
+                  console.log('=== DEBUG: Message exists check ===', !!exists);
+
+                  if (!exists) {
+                    console.log('=== DEBUG: ✅ ADDING NEW WEBSOCKET MESSAGE ===');
                     messages.value.push(newMessage);
-                    scrollToBottom();
+                    console.log('=== DEBUG: New messages count ===', messages.value.length);
+
+                    // Update last message ID for polling
+                    if (newMessage.id > lastMessageId.value) {
+                      lastMessageId.value = newMessage.id;
+                    }
+
+                    setTimeout(() => scrollToBottom(), 100);
 
                     // Update unread count if widget is closed
                     if (!isOpen.value) {
                       unreadCount.value++;
                     }
+                  } else {
+                    console.log('=== DEBUG: ❌ Message already exists, skipping ===', newMessage.id);
                   }
-                });
+                }
+              });
             }
 
             // Also listen on widget session channel for backward compatibility
             console.log('=== DEBUG: Subscribing to widget session channel ===', `widget.session.${sessionId.value}`);
 
-            echoInstance.channel(`widget.session.${sessionId.value}`)
-              .listen('.widget.message.sent', (payload) => {
-                console.log('=== DEBUG: Widget message received ===', payload);
-                if (payload && payload.message) {
-                  const newMessage = {
-                    id: payload.message.id,
-                    message: payload.message.message,
-                    from_operator: payload.message.from_operator,
-                    created_at: payload.message.created_at
-                  };
+            const widgetChannel = echoInstance.channel(`widget.session.${sessionId.value}`);
+
+            widgetChannel.subscribed(() => {
+              console.log('=== DEBUG: ✅ Successfully subscribed to widget session channel ===');
+              console.log('=== DEBUG: Widget channel object:', widgetChannel);
+              console.log('=== DEBUG: Listening for: widget.message.sent ===');
+            });
+
+            widgetChannel.error((error) => {
+              console.error('=== DEBUG: Widget channel subscription error ===', error);
+            });
+
+            widgetChannel.listen('widget.message.sent', (payload) => {
+              console.log('=== DEBUG: *** WIDGET MESSAGE RECEIVED *** ===');
+              console.log('=== DEBUG: Event: widget.message.sent ===');
+              console.log('=== DEBUG: Channel: widget.session.' + sessionId.value + ' ===');
+              console.log('=== DEBUG: Full payload ===', payload);
+              console.log('=== DEBUG: Payload type ===', typeof payload);
+              console.log('=== DEBUG: Payload keys ===', Object.keys(payload || {}));
+
+              if (payload && payload.message) {
+                console.log('=== DEBUG: Widget message object found ===', payload.message);
+                console.log('=== DEBUG: Message ID ===', payload.message.id);
+                console.log('=== DEBUG: Message text ===', payload.message.message);
+                console.log('=== DEBUG: From operator ===', payload.message.from_operator);
+                console.log('=== DEBUG: Current messages count ===', messages.value.length);
+
+                const newMessage = {
+                  id: payload.message.id,
+                  message: payload.message.message,
+                  from_operator: Boolean(payload.message.from_operator),
+                  created_at: payload.message.created_at
+                };
+
+                console.log('=== DEBUG: Formatted widget message ===', newMessage);
+
+                // Check if message doesn't already exist
+                const exists = messages.value.find(m => m.id === newMessage.id);
+                console.log('=== DEBUG: Widget message exists check ===', !!exists);
+
+                if (!exists) {
+                  console.log('=== DEBUG: ✅ ADDING NEW WIDGET MESSAGE ===', newMessage);
                   messages.value.push(newMessage);
-                  scrollToBottom();
+                  console.log('=== DEBUG: New messages count ===', messages.value.length);
+
+                  // Update last message ID for polling
+                  if (newMessage.id > lastMessageId.value) {
+                    lastMessageId.value = newMessage.id;
+                    console.log('=== DEBUG: Updated lastMessageId ===', lastMessageId.value);
+                  }
+
+                  setTimeout(() => scrollToBottom(), 100);
 
                   // Update unread count if widget is closed
                   if (!isOpen.value) {
                     unreadCount.value++;
+                    console.log('=== DEBUG: Updated unread count ===', unreadCount.value);
                   }
+                } else {
+                  console.log('=== DEBUG: ❌ Widget message already exists, skipping ===', newMessage.id);
                 }
-              });
+              } else {
+                console.log('=== DEBUG: ❌ NO MESSAGE OBJECT IN WIDGET PAYLOAD ===');
+                console.log('=== DEBUG: Widget payload structure issue ===', payload);
+              }
+            });
 
             console.log('=== DEBUG: WebSocket/Reverb initialized successfully ===');
+            console.log('=== DEBUG: Active channels:', {
+              chat: chatId ? `chat.${chatId}` : 'not subscribed',
+              widget: `widget.session.${sessionId.value}`
+            });
+
+            // Add global event listener to catch ALL WebSocket events for debugging
+            if (window.Pusher && echoInstance.connector && echoInstance.connector.pusher) {
+              const pusher = echoInstance.connector.pusher;
+
+              // Listen to ALL events on ALL channels
+              pusher.bind_global((eventName, data) => {
+                console.log('=== DEBUG: 🌐 GLOBAL WEBSOCKET EVENT ===');
+                console.log('=== DEBUG: Event name:', eventName);
+                console.log('=== DEBUG: Event data:', data);
+                console.log('=== DEBUG: All channels:', Object.keys(pusher.channels.channels));
+              });
+            }
+
+            // Add global event listener to catch ALL WebSocket events for debugging
+            if (window.Pusher && echoInstance.connector && echoInstance.connector.pusher) {
+              const pusher = echoInstance.connector.pusher;
+
+              // Listen to ALL events on ALL channels
+              pusher.bind_global((eventName, data) => {
+                console.log('=== DEBUG: 🌐 GLOBAL WEBSOCKET EVENT ===');
+                console.log('=== DEBUG: Event name:', eventName);
+                console.log('=== DEBUG: Event data:', data);
+                console.log('=== DEBUG: Channel:', pusher.channels.channels);
+              });
+            }
 
           } catch (err) {
             console.error('=== DEBUG: Realtime init failed ===', err);
             console.warn('Realtime init failed (non-blocking):', err);
+            websocketConnected.value = false;
+
+            // Start polling fallback immediately if WebSocket setup fails
+            if (useWebsocketFallback.value && sessionId.value) {
+              console.log('=== DEBUG: WebSocket setup failed, starting polling fallback ===');
+              pollingInterval.value = setInterval(async () => {
+                await pollForNewMessages();
+              }, pollingIntervalMs.value);
+            }
           }
         };
 
@@ -978,6 +1325,12 @@
           if (typingTimeout.value) {
             clearTimeout(typingTimeout.value);
           }
+          if (pollingInterval.value) {
+            clearInterval(pollingInterval.value);
+          }
+          if (echoInstance) {
+            echoInstance.disconnect();
+          }
         });
 
         return {
@@ -991,6 +1344,7 @@
           supportAgent,
           canSendMessages,
           currentUser,
+          websocketConnected,
           toggleChat,
           sendMessage,
           handleTyping,
@@ -999,6 +1353,7 @@
           checkUserAccess,
           handleAuthRequired,
           updateUser,
+          updateWidget,
           // Configuration objects
           animationConfig,
           designConfig,
@@ -1073,11 +1428,30 @@
                   </p>
                 </div>
               </div>
-              <button @click="toggleChat" style="color: rgba(255, 255, 255, 0.8); background: none; border: none; cursor: pointer; transition: color 0.3s;">
-                <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 4px;" title="WebSocket Connection Status">
+                  <div :style="{ 
+                    width: '8px', 
+                    height: '8px', 
+                    borderRadius: '50%', 
+                    backgroundColor: websocketConnected ? '#10B981' : '#EF4444',
+                    transition: 'background-color 0.3s'
+                  }"></div>
+                  <span style="font-size: 10px; color: rgba(255, 255, 255, 0.7);">
+                    {{ websocketConnected ? 'WS' : 'Polling' }}
+                  </span>
+                </div>
+                <button @click="updateWidget" style="color: rgba(255, 255, 255, 0.8); background: none; border: none; cursor: pointer; transition: color 0.3s; padding: 4px;" title="Update widget">
+                  <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <button @click="toggleChat" style="color: rgba(255, 255, 255, 0.8); background: none; border: none; cursor: pointer; transition: color 0.3s;">
+                  <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <!-- Messages Area -->
@@ -1236,6 +1610,17 @@
 
       app.component('ChatWidgetComponent', ChatWidgetComponent);
       app.mount('#chat-widget-container');
+
+      // Make widget update function globally accessible
+      if (!window.ChatWidget) {
+        window.ChatWidget = {};
+      }
+      window.ChatWidget.update = () => {
+        if (window.ChatWidgetComponent && window.ChatWidgetComponent.updateWidget) {
+          window.ChatWidgetComponent.updateWidget();
+        }
+      };
+
     }
   }
 })();

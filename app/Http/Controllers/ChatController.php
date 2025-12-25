@@ -7,6 +7,7 @@ use App\Events\ChatUpdated;
 use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Events\UserOnlineStatus;
+use App\Events\WidgetMessageSent;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\User;
@@ -154,8 +155,24 @@ class ChatController extends Controller
 
         $chat->touch();
 
-        $broadcastEvent = new MessageSent($message->load('user'));
+        // Load user for message
+        $message->load('user');
+
+        // Broadcast to chat channels (for chat interface)
+        $broadcastEvent = new MessageSent($message);
         broadcast($broadcastEvent)->toOthers();
+
+        // If this is a widget chat, also broadcast to widget session channel
+        $widgetSession = $chat->widgetSession;
+        if ($widgetSession) {
+            broadcast(new WidgetMessageSent($message, $widgetSession))->toOthers();
+            Log::info('WidgetMessageSent broadcast sent from ChatController', [
+                'chat_id' => $chat->id,
+                'message_id' => $message->id,
+                'session_id' => $widgetSession->session_id,
+                'widget_channel' => 'widget.session.' . $widgetSession->session_id,
+            ]);
+        }
 
         // Broadcast chat update to update chat lists
         broadcast(new ChatUpdated($chat, $message));

@@ -285,7 +285,7 @@ function joinChatChannel() {
     // Listen on both private channel (for authenticated users) and public channel (for widgets)
     echo.value
       .private(`chat.${chat.value.id}`)
-      .listen(".MessageSent", (e: { message: ChatMessage }) => {
+      .listen("message.sent", (e: { message: ChatMessage }) => {
         console.log("=== DEBUG: Message received via private channel ===", e);
         messages.value.push(e.message);
         nextTick(() => scrollToBottom());
@@ -296,7 +296,7 @@ function joinChatChannel() {
         console.log("=== DEBUG: Falling back to public channel ===");
         echo.value
           ?.channel(`chat.${chat.value.id}`)
-          .listen(".MessageSent", (e: { message: ChatMessage }) => {
+          .listen("message.sent", (e: { message: ChatMessage }) => {
             console.log("=== DEBUG: Message received via public channel ===", e);
             messages.value.push(e.message);
             nextTick(() => scrollToBottom());
@@ -306,7 +306,7 @@ function joinChatChannel() {
     // Also listen on public channel for widget messages
     echo.value
       .channel(`chat.${chat.value.id}`)
-      .listen(".MessageSent", (e: { message: ChatMessage }) => {
+      .listen("message.sent", (e: { message: ChatMessage }) => {
         console.log("=== DEBUG: Message received via public channel ===", e);
         // Check if message already exists to avoid duplicates
         const existingMessage = messages.value.find((msg) => msg.id === e.message.id);
@@ -352,31 +352,43 @@ async function sendMessage() {
         }
       );
     } else {
-      // Regular chat
-      response = await fetch(`/chat/${chat.value.id}/message`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-TOKEN":
-            document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ||
-            "",
-        },
-        body: JSON.stringify({
+      // Regular chat - use Inertia router for automatic CSRF handling
+      router.post(
+        `/chat/${chat.value.id}/message`,
+        {
           message: messageText,
-        }),
-      });
+        },
+        {
+          preserveState: true,
+          preserveScroll: true,
+          onSuccess: (page) => {
+            console.log("Message sent successfully:", page.props);
+            // Message will be added via WebSocket, no need to add manually
+          },
+          onError: (errors) => {
+            console.error("Error sending message:", errors);
+            newMessage.value = messageText;
+          },
+        }
+      );
+
+      // Return early for Inertia request as it's handled differently
+      return;
     }
 
-    const data = await response.json();
+    // Only handle response for widget chats (regular chats use Inertia)
+    if (chat.value.widget_session_id && response) {
+      const data = await response.json();
 
-    if (response.ok) {
-      // Add message immediately for sender
-      messages.value.push(data.message);
-      await nextTick();
-      scrollToBottom();
-    } else {
-      console.error("Error sending message:", data);
-      newMessage.value = messageText;
+      if (response.ok) {
+        // Add message immediately for sender
+        messages.value.push(data.message);
+        await nextTick();
+        scrollToBottom();
+      } else {
+        console.error("Error sending message:", data);
+        newMessage.value = messageText;
+      }
     }
   } catch (error) {
     console.error("Error sending message:", error);
@@ -388,28 +400,23 @@ async function sendMessage() {
 }
 
 async function startNewChat(user: User) {
-  try {
-    const response = await fetch("/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRF-TOKEN":
-          document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") ||
-          "",
+  router.post(
+    "/chat",
+    {
+      user_id: user.id,
+    },
+    {
+      onSuccess: (page) => {
+        const chat = (page.props as any).chat;
+        if (chat) {
+          router.visit(`/chat/${chat.id}`);
+        }
       },
-      body: JSON.stringify({
-        user_id: user.id,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
-      router.visit(`/chat/${data.chat.id}`);
+      onError: (errors) => {
+        console.error("Error creating chat:", errors);
+      },
     }
-  } catch (error) {
-    console.error("Error creating chat:", error);
-  }
+  );
 }
 
 function goBack() {
