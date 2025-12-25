@@ -33,6 +33,22 @@ class Chat extends Model
         static::deleting(function (Chat $chat): void {
             $chat->messages()->delete();
         });
+        
+        // Clear cache when chat is created or updated
+        static::saved(function (Chat $chat): void {
+            // Clear cache for chat owner and all support users
+            cache()->forget("user_chats_{$chat->user_id}_user");
+            cache()->forget("user_chats_{$chat->user_id}_merchant");
+            cache()->forget("user_chats_{$chat->user_id}_support");
+            cache()->forget("user_chats_{$chat->user_id}_admin");
+            
+            // Clear cache for all support users (they can see all chats)
+            $supportUsers = \App\Models\User::whereIn('role', ['support', 'admin'])->pluck('id');
+            foreach ($supportUsers as $userId) {
+                cache()->forget("user_chats_{$userId}_support");
+                cache()->forget("user_chats_{$userId}_admin");
+            }
+        });
     }
 
     public function user(): BelongsTo

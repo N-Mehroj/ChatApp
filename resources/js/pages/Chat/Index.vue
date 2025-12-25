@@ -1631,41 +1631,35 @@ const setupOnlineStatusListeners = () => {
     return;
   }
 
-  // Listen to all users' status changes
-  chatList.value.forEach((chat) => {
-    const otherUserId = chat.user ? chat.user.id : null;
-    if (otherUserId) {
-      const statusChannel = `user-status.${otherUserId}`;
-      console.log(`🔔 Setting up status listener for user ${otherUserId}`);
+  // Instead of listening to each user separately, listen to a general online users channel
+  // This reduces the number of connections significantly
+  const generalStatusChannel = `online-users`;
+  console.log(`🔔 Setting up general status listener`);
 
-      window.Echo.channel(statusChannel)
-        .listen(".status.updated", (eventData) => {
-          if (eventData.is_online) {
-            onlineUsers.value.add(eventData.user_id);
-            console.log(`🟢 User ${eventData.user_id} (${eventData.name}) is now online`);
-          } else {
-            onlineUsers.value.delete(eventData.user_id);
-            console.log(
-              `🔴 User ${eventData.user_id} (${eventData.name}) is now offline`
-            );
-          }
+  window.Echo.channel(generalStatusChannel)
+    .listen(".user.status.updated", (eventData) => {
+      if (eventData.is_online) {
+        onlineUsers.value.add(eventData.user_id);
+        console.log(`🟢 User ${eventData.user_id} (${eventData.name}) is now online`);
+      } else {
+        onlineUsers.value.delete(eventData.user_id);
+        console.log(`🔴 User ${eventData.user_id} (${eventData.name}) is now offline`);
+      }
 
-          userStatuses.value[eventData.user_id] = {
-            is_online: eventData.is_online,
-            last_seen: eventData.last_seen,
-            name: eventData.name,
-          };
+      userStatuses.value[eventData.user_id] = {
+        is_online: eventData.is_online,
+        last_seen: eventData.last_seen,
+        name: eventData.name,
+      };
 
-          console.log(`📊 Current online users:`, Array.from(onlineUsers.value));
-        })
-        .subscribed(() => {
-          console.log(`✅ Status subscription successful for user ${otherUserId}`);
-        })
-        .error((error) => {
-          console.error(`❌ Status subscription error for user ${otherUserId}:`, error);
-        });
-    }
-  });
+      console.log(`📊 Current online users:`, Array.from(onlineUsers.value));
+    })
+    .subscribed(() => {
+      console.log(`✅ General status subscription successful`);
+    })
+    .error((error) => {
+      console.error(`❌ General status subscription error:`, error);
+    });
 };
 
 // Set up online status tracking
@@ -1673,15 +1667,32 @@ const setupOnlineStatusTracking = () => {
   // Send online status immediately
   sendOnlineStatus();
 
-  // Send online status every 30 seconds
-  const onlineInterval = setInterval(sendOnlineStatus, 30000);
+  // Reduce frequency from 30s to 5 minutes for less server load
+  const onlineInterval = setInterval(sendOnlineStatus, 300000); // 5 minutes instead of 30 seconds
+
+  // Use page visibility API to send status only when needed
+  let wasVisible = true;
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && !wasVisible) {
+      // Page became visible, send online status
+      sendOnlineStatus();
+      wasVisible = true;
+    } else if (document.visibilityState === 'hidden') {
+      // Page became hidden, send offline status
+      sendOfflineStatus();
+      wasVisible = false;
+    }
+  };
+  
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // Send offline status when page unloads
   window.addEventListener("beforeunload", sendOfflineStatus);
 
-  // Clean up interval on component unmount
+  // Clean up interval and listeners on component unmount
   return () => {
     clearInterval(onlineInterval);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener("beforeunload", sendOfflineStatus);
     sendOfflineStatus();
   };
@@ -1767,9 +1778,8 @@ onMounted(() => {
     });
     setupGlobalEcho(); // Global echo setup for all chats
   } else {
-    console.error("❌ Echo not available, falling back to polling");
-    // Poll for new messages every 5 seconds as fallback
-    setInterval(pollForNewMessages, 5000);
+    console.warn("⚠️ Echo not available - real-time features disabled");
+    // Only poll when specifically needed, not continuously
   }
 });
 

@@ -96,6 +96,7 @@ class User extends Authenticatable
      */
     protected $appends = [
         'display_name',
+        'name', // For compatibility with frontend
         'avatar_url',
         'is_online',
     ];
@@ -198,6 +199,14 @@ class User extends Authenticatable
         }
 
         return $this->email ?: 'Unknown User';
+    }
+
+    /**
+     * Get name attribute (alias for display_name for compatibility)
+     */
+    public function getNameAttribute(): string
+    {
+        return $this->getDisplayNameAttribute();
     }
 
     /**
