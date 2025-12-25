@@ -187,7 +187,7 @@ class User extends Authenticatable
     public function getDisplayNameAttribute(): string
     {
         if ($this->first_name && $this->last_name) {
-            return trim($this->first_name.' '.$this->last_name);
+            return trim($this->first_name . ' ' . $this->last_name);
         }
 
         if ($this->first_name) {
@@ -215,7 +215,7 @@ class User extends Authenticatable
     public function getAvatarUrlAttribute(): string
     {
         if ($this->image) {
-            return asset('storage/'.$this->image);
+            return asset('storage/' . $this->image);
         }
 
         $name = urlencode($this->display_name);

@@ -32,9 +32,9 @@ class ChatController extends Controller
             'widgetSession:id,session_id,visitor_name,visitor_email,visitor_phone,user_id',
             'widgetSession.user:id,first_name,last_name,email'
         ])
-        ->withCount(['messages', 'messages as unread_messages_count' => function ($query) use ($user) {
-            $query->where('user_id', '!=', $user->id)->whereNull('read_at');
-        }]);
+            ->withCount(['messages', 'messages as unread_messages_count' => function ($query) use ($user) {
+                $query->where('user_id', '!=', $user->id)->whereNull('read_at');
+            }]);
 
         if ($user->isSupport()) {
             // Support users see all chats but limited to 50 most recent
@@ -47,7 +47,7 @@ class ChatController extends Controller
         // Transform data without additional queries
         $chats->each(function ($chat) {
             $chat->unread_count = $chat->unread_messages_count ?? 0;
-            
+
             if ($chat->widgetSession) {
                 $chat->is_widget_chat = true;
                 $chat->visitor_name = $chat->widgetSession->visitor_name ?? 'Anonymous';
@@ -57,7 +57,7 @@ class ChatController extends Controller
             } else {
                 $chat->is_widget_chat = false;
             }
-            
+
             // Remove count attributes to clean up response
             unset($chat->messages_count, $chat->unread_messages_count);
         });
@@ -279,10 +279,10 @@ class ChatController extends Controller
     public function getUserChats(): JsonResponse
     {
         $user = Auth::user();
-        
+
         // Cache key based on user and role
         $cacheKey = "user_chats_{$user->id}_{$user->role}";
-        
+
         // Check cache first (cache for 1 minute to balance freshness vs performance)
         $chats = cache()->remember($cacheKey, 60, function () use ($user) {
             if ($user->isSupport()) {
@@ -291,18 +291,18 @@ class ChatController extends Controller
                     'user:id,first_name,last_name,email,image,role,last_activity',
                     'lastMessage:id,chat_id,user_id,message,created_at,from_operator'
                 ])
-                ->latest('updated_at')
-                ->limit(100) // Limit for performance
-                ->get();
+                    ->latest('updated_at')
+                    ->limit(100) // Limit for performance
+                    ->get();
             } else {
                 // Regular users see only their own chats
                 return Chat::with([
                     'user:id,first_name,last_name,email,image,role,last_activity',
                     'lastMessage:id,chat_id,user_id,message,created_at,from_operator'
                 ])
-                ->where('user_id', $user->id)
-                ->latest('updated_at')
-                ->get();
+                    ->where('user_id', $user->id)
+                    ->latest('updated_at')
+                    ->get();
             }
         });
 
@@ -383,7 +383,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
         $cacheKey = "user_online_status_{$user->id}";
-        
+
         // Check if we recently updated online status to avoid too frequent updates
         $lastUpdate = cache($cacheKey);
         if ($lastUpdate && now()->diffInMinutes($lastUpdate) < 2) {
@@ -397,7 +397,7 @@ class ChatController extends Controller
 
         // Update user's last activity only if enough time has passed
         $user->update(['last_activity' => now()]);
-        
+
         // Cache the update time to prevent frequent database updates
         cache([$cacheKey => now()], now()->addMinutes(10));
 
