@@ -1230,19 +1230,39 @@
                 console.log('=== DEBUG: Event name:', eventName);
                 console.log('=== DEBUG: Event data:', data);
                 console.log('=== DEBUG: All channels:', Object.keys(pusher.channels.channels));
-              });
-            }
 
-            // Add global event listener to catch ALL WebSocket events for debugging
-            if (window.Pusher && echoInstance.connector && echoInstance.connector.pusher) {
-              const pusher = echoInstance.connector.pusher;
+                // Process message.sent events if they aren't handled by specific channel listeners
+                if (eventName === 'message.sent' && data && data.message) {
+                  console.log('=== DEBUG: 🚨 GLOBAL FALLBACK - Processing message.sent ===');
 
-              // Listen to ALL events on ALL channels
-              pusher.bind_global((eventName, data) => {
-                console.log('=== DEBUG: 🌐 GLOBAL WEBSOCKET EVENT ===');
-                console.log('=== DEBUG: Event name:', eventName);
-                console.log('=== DEBUG: Event data:', data);
-                console.log('=== DEBUG: Channel:', pusher.channels.channels);
+                  const newMessage = {
+                    id: data.message.id,
+                    message: data.message.message,
+                    from_operator: Boolean(data.message.from_operator),
+                    created_at: data.message.created_at
+                  };
+
+                  // Check if message doesn't already exist
+                  const exists = messages.value.find(m => m.id === newMessage.id);
+                  if (!exists) {
+                    console.log('=== DEBUG: ✅ GLOBAL - Adding message to widget ===', newMessage);
+                    messages.value.push(newMessage);
+
+                    // Update last message ID for polling
+                    if (newMessage.id > lastMessageId.value) {
+                      lastMessageId.value = newMessage.id;
+                    }
+
+                    setTimeout(() => scrollToBottom(), 100);
+
+                    // Update unread count if widget is closed
+                    if (!isOpen.value && newMessage.from_operator) {
+                      unreadCount.value++;
+                    }
+                  } else {
+                    console.log('=== DEBUG: ❌ GLOBAL - Message already exists, skipping ===', newMessage.id);
+                  }
+                }
               });
             }
 
