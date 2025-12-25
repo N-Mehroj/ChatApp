@@ -129,11 +129,25 @@ class WidgetController extends Controller
                 $chat = Chat::firstOrCreate([
                     'user_id' => $merchant->id,
                     'visitor_user_id' => $session->user_id,
+                ], [
+                    'widget_session_id' => $session->id, // Always set session ID when creating
                 ]);
 
-                // Link this chat to the session if not already linked
-                if (!$chat->widget_session_id) {
+                \Log::info('Widget Session - Chat found/created', [
+                    'chat_id' => $chat->id,
+                    'merchant_id' => $merchant->id,
+                    'visitor_user_id' => $session->user_id,
+                    'was_recently_created' => $chat->wasRecentlyCreated
+                ]);
+
+                // Always ensure this chat is linked to the current session
+                if ($chat->widget_session_id !== $session->id) {
                     $chat->update(['widget_session_id' => $session->id]);
+                    \Log::info('Chat session link updated', [
+                        'chat_id' => $chat->id,
+                        'old_session_id' => $chat->widget_session_id,
+                        'new_session_id' => $session->id
+                    ]);
                 }
             } else {
                 // For anonymous visitors: find or create chat by session
@@ -156,6 +170,13 @@ class WidgetController extends Controller
                         'created_at' => $message->created_at->toISOString(),
                     ];
                 });
+
+            \Log::info('Widget Session - Messages loaded', [
+                'chat_id' => $chat->id,
+                'messages_count' => $messages->count(),
+                'first_message' => $messages->first(),
+                'last_message' => $messages->last()
+            ]);
 
             $reverbOptions = config('broadcasting.connections.reverb.options', []);
             $reverbScheme = $reverbOptions['scheme'] ?? 'https';
@@ -197,6 +218,8 @@ class WidgetController extends Controller
      */
     public function sendMessage(Request $request): \Illuminate\Http\JsonResponse
     {
+        \Log::info('SendMessage endpoint hit', ['data' => $request->all()]);
+
         $request->validate([
             'api_key' => 'required|string',
             'session_id' => 'required|string',
@@ -221,10 +244,31 @@ class WidgetController extends Controller
                 return response()->json(['error' => 'Invalid session'], 404);
             }
 
-            // Find the chat
-            $chat = Chat::where('widget_session_id', $session->id)->first();
+            // Find the chat using the same logic as createSession
+            $chat = null;
+            
+            if ($session->user_id) {
+                // For logged-in users: find by merchant and visitor user
+                $chat = Chat::where('user_id', $merchant->id)
+                    ->where('visitor_user_id', $session->user_id)
+                    ->first();
+                
+                // If not found, try by widget_session_id as fallback
+                if (!$chat) {
+                    $chat = Chat::where('widget_session_id', $session->id)->first();
+                }
+            } else {
+                // For anonymous visitors: find by session
+                $chat = Chat::where('widget_session_id', $session->id)->first();
+            }
 
             if (! $chat) {
+                \Log::error('Chat not found for session', [
+                    'session_id' => $session->id,
+                    'session_user_id' => $session->user_id,
+                    'merchant_id' => $merchant->id,
+                    'request_session_id' => $request->session_id
+                ]);
                 return response()->json(['error' => 'Chat not found'], 404);
             }
 
@@ -233,6 +277,7 @@ class WidgetController extends Controller
                 'chat_id' => $chat->id,
                 'user_id' => $session->user_id, // null for anonymous visitors, user_id when identified
                 'message' => $request->message,
+                'from_operator' => false, // User messages are not from operator
                 'widget_session_id' => $session->id,
             ]);
 
@@ -252,7 +297,8 @@ class WidgetController extends Controller
                 'message' => [
                     'id' => $message->id,
                     'message' => $message->message,
-                    'is_from_user' => true,
+                    'from_operator' => $message->from_operator,
+                    'is_from_user' => true, // Keep for backward compatibility
                     'created_at' => $message->created_at->toISOString(),
                 ],
             ]);

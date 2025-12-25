@@ -403,7 +403,7 @@ ChatWidget.setUser({
 
         // Demo widget configuration
         window.chatWidgetConfig = {
-            apiKey: "demo_widget_key_12345",
+            apiKey: "widget_1JUdL1JkupeflI2M0sqoya1vWSejCqfS", // Real API key for testing
             primaryColor: "#3B82F6",
             position: "bottom-right",
             debug: true,
@@ -454,7 +454,7 @@ ChatWidget.setUser({
         // Configuration control functions
         function updateConfig() {
             const config = {
-                apiKey: "demo_widget_key_12345",
+                apiKey: "widget_1JUdL1JkupeflI2M0sqoya1vWSejCqfS", // Real API key for testing
                 primaryColor: document.getElementById('primaryColor').value,
                 position: document.getElementById('position').value,
                 debug: true,

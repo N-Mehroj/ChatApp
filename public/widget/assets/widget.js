@@ -90,8 +90,8 @@
           borderRadius: 'normal',
           shadow: 'normal',
           buttonStyle: 'floating',
-          chatWidth: 320,
-          chatHeight: 500,
+          chatinlineSize: 320,
+          chatblockSize: 500,
           fontSize: 'normal',
           avatarStyle: 'circle',
           messageStyle: 'bubbles',
@@ -283,6 +283,8 @@
 
         const initializeSession = async () => {
           try {
+            console.log('=== DEBUG: initializeSession starting ===');
+            
             // Get user info first to pass with session creation
             const userInfo = getCurrentUserInfo();
             console.log('=== DEBUG: Widget opening ===');
@@ -310,6 +312,9 @@
               'Content-Type': 'application/json'
             };
 
+            console.log('=== DEBUG: Making session request to:', `${props.apiUrl}/session`);
+            console.log('=== DEBUG: Session payload:', sessionPayload);
+
             const response = await fetch(`${props.apiUrl}/session`, {
               method: 'POST',
               headers: headers,
@@ -317,16 +322,36 @@
               body: JSON.stringify(sessionPayload)
             });
 
+            console.log('=== DEBUG: Session response status:', response.status);
+            console.log('=== DEBUG: Session response ok:', response.ok);
+
             if (!response.ok) {
+              console.error('=== DEBUG: Session response error ===');
               throw new Error('Session init failed');
             }
 
             const data = await response.json();
+            console.log('=== DEBUG: Full API response ===', data);
+            
             sessionId.value = data.session_id;
-            messages.value = data.messages || [];
+            console.log('=== DEBUG: Session ID set to:', sessionId.value);
+
+            // Validate messages before setting
+            if (data.messages && Array.isArray(data.messages)) {
+              const validMessages = data.messages.filter(msg => msg && typeof msg === 'object' && msg.id);
+              messages.value = validMessages.map(msg => ({
+                id: msg.id,
+                message: msg.message || '',
+                from_operator: Boolean(msg.from_operator),
+                created_at: msg.created_at || new Date().toISOString()
+              }));
+            } else {
+              messages.value = [];
+            }
+
             supportAgent.value = data.agent || { name: 'Support Team' };
 
-            console.log('=== DEBUG: Session created ===');
+            console.log('=== DEBUG: Session created successfully ===');
             console.log('Chat ID:', data.chat_id);
             console.log('Messages received:', data.messages?.length || 0);
             console.log('Messages.value length:', messages.value.length);
@@ -505,7 +530,14 @@
         window.ChatWidgetComponent.updateUser = updateUser;
 
         const sendMessage = async () => {
+          console.log('=== DEBUG: sendMessage called ===');
+          console.log('canSendMessages:', canSendMessages.value);
+          console.log('newMessage:', newMessage.value);
+          console.log('sending:', sending.value);
+          console.log('sessionId:', sessionId.value);
+
           if (!canSendMessages.value) {
+            console.log('=== DEBUG: User cannot send messages ===');
             if (accessConfig.requireAuth) {
               handleAuthRequired();
               return;
@@ -515,7 +547,25 @@
             }
           }
 
-          if (!newMessage.value.trim() || sending.value) return;
+          if (!newMessage.value.trim() || sending.value) {
+            console.log('=== DEBUG: Message empty or already sending ===');
+            return;
+          }
+
+          if (!sessionId.value) {
+            console.error('=== DEBUG: No session ID available, cannot send message ===');
+            // Try to initialize session if missing
+            try {
+              await initializeSession();
+              if (!sessionId.value) {
+                console.error('Failed to create session, cannot send message');
+                return;
+              }
+            } catch (error) {
+              console.error('Failed to initialize session:', error);
+              return;
+            }
+          }
 
           const message = newMessage.value.trim();
           newMessage.value = '';
@@ -551,6 +601,13 @@
               page_url: window.location.href
             };
 
+            console.log('=== DEBUG: Sending message payload ===', payload);
+            console.log('=== DEBUG: Session ID ===', sessionId.value);
+            console.log('=== DEBUG: API URL ===', `${props.apiUrl}/message`);
+            console.log('=== DEBUG: props.apiUrl ===', props.apiUrl);
+            console.log('=== DEBUG: Full URL for request ===', `${props.apiUrl}/message`);
+            console.log('=== DEBUG: window.location.origin ===', window.location.origin);
+
             // Get secure headers from SDK
             const headers = window.ChatWidget?.getSecureHeaders ?
               window.ChatWidget.getSecureHeaders() :
@@ -571,24 +628,81 @@
               body: JSON.stringify(payload)
             });
 
+            console.log('=== DEBUG: Response received ===');
+            console.log('=== DEBUG: Response status ===', response.status);
+            console.log('=== DEBUG: Response statusText ===', response.statusText);
+            console.log('=== DEBUG: Response ok ===', response.ok);
+            console.log('=== DEBUG: Response headers ===', [...response.headers.entries()]);
+
+            if (!response.ok) {
+              const responseText = await response.text();
+              console.error('=== DEBUG: Error response body ===', responseText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
             const data = await response.json();
+            console.log('=== DEBUG: Message sent response ===', data);
+
+            // Check if response has proper structure
+            if (!data) {
+              throw new Error('Empty response from server');
+            }
+
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            // Update the temporary message with the server response
             const messageIndex = messages.value.findIndex(m => m.id === userMessage.id);
-            if (messageIndex !== -1) {
-              messages.value[messageIndex] = data.message;
+            console.log('=== DEBUG: Message update ===', {
+              messageIndex,
+              userMessageId: userMessage.id,
+              serverResponse: data.message,
+              hasMessage: !!data.message
+            });
+
+            if (messageIndex !== -1 && data.message) {
+              // Ensure the server response has required fields
+              const updatedMessage = {
+                id: data.message.id || userMessage.id,
+                message: data.message.message || userMessage.message,
+                from_operator: data.message.from_operator || false,
+                created_at: data.message.created_at || userMessage.created_at
+              };
+              
+              console.log('=== DEBUG: Updating message at index', messageIndex, 'with:', updatedMessage);
+              messages.value[messageIndex] = updatedMessage;
+            } else if (messageIndex === -1) {
+              console.warn('Could not find message to update in array');
+            } else if (!data.message) {
+              console.warn('Server response missing message data');
             }
 
           } catch (error) {
-            console.error('Failed to send message:', error);
+            console.error('=== DEBUG: Message send error ===', error);
+            console.error('Error details:', {
+              name: error.name,
+              message: error.message,
+              stack: error.stack
+            });
+            
+            // Remove the failed message from array
+            const failedMessageIndex = messages.value.findIndex(m => m.id === userMessage.id);
+            if (failedMessageIndex !== -1) {
+              messages.value.splice(failedMessageIndex, 1);
+            }
+            
             // Add error message
             messages.value.push({
               id: Date.now() + 1,
-              message: 'Sorry, there was an error sending your message. Please try again.',
+              message: `Failed to send message: ${error.message}. Please try again.`,
               from_operator: true,
               created_at: new Date().toISOString()
             });
             scrollToBottom();
           } finally {
             sending.value = false;
+            console.log('=== DEBUG: Message sending finished, sending.value =', sending.value);
           }
         };
 
@@ -1013,7 +1127,7 @@
           :user-info="userInfo"
         />`,
         data() {
-          return {
+          const configData = {
             apiKey: window.ChatWidget?.config?.apiKey || 'demo_key',
             apiUrl: window.ChatWidget?.config?.apiUrl || '/api/widget',
             primaryColor: window.ChatWidget?.config?.primaryColor || '#3B82F6',
@@ -1024,6 +1138,12 @@
             userConfig: window.ChatWidget?.config?.user || {},
             userInfo: window.ChatWidget?.getCurrentUserInfo ? window.ChatWidget.getCurrentUserInfo() : {}
           };
+          
+          console.log('=== DEBUG: Widget config data ===', configData);
+          console.log('=== DEBUG: window.ChatWidget ===', window.ChatWidget);
+          console.log('=== DEBUG: window.ChatWidget.config ===', window.ChatWidget?.config);
+          
+          return configData;
         }
       });
 
