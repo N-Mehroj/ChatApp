@@ -169,6 +169,40 @@
         const pollingIntervalMs = ref(2000); // 2s - less frequent when WebSocket is primary
         const websocketConnected = ref(false);
         const useWebsocketFallback = ref(true);
+        
+        // Duplicate prevention
+        const processedMessageIds = new Set();
+        
+        // Safe message adding function with duplicate prevention
+        const addMessage = (messageData) => {
+          const messageId = messageData.id;
+          
+          // Check both Set and array for duplicates
+          if (processedMessageIds.has(messageId) || messages.value.find(m => m.id === messageId)) {
+            console.log('=== DEBUG: ❌ Message already processed, skipping ===', messageId);
+            return false;
+          }
+          
+          // Add to processed set
+          processedMessageIds.add(messageId);
+          
+          // Add to messages array
+          messages.value.push(messageData);
+          console.log('=== DEBUG: ✅ New message added ===', messageId);
+          
+          // Update last message ID
+          if (messageId > lastMessageId.value) {
+            lastMessageId.value = messageId;
+          }
+          
+          // Scroll and update unread count
+          setTimeout(() => scrollToBottom(), 100);
+          if (!isOpen.value) {
+            unreadCount.value++;
+          }
+          
+          return true;
+        };
 
         // Demo mode only when explicit demo key is provided
         const isDemoMode = props.apiKey === 'demo_key';
@@ -395,7 +429,7 @@
               if (newMessages.length > 0) {
                 console.log('=== DEBUG: Found', newMessages.length, 'new messages via polling ===');
 
-                // Add new messages
+                // Add new messages using safe function
                 newMessages.forEach(msg => {
                   const formattedMessage = {
                     id: msg.id,
@@ -404,17 +438,7 @@
                     created_at: msg.created_at || new Date().toISOString()
                   };
 
-                  // Check if message doesn't already exist
-                  const exists = messages.value.find(m => m.id === msg.id);
-                  if (!exists) {
-                    console.log('=== DEBUG: Adding new polling message ===', formattedMessage);
-                    messages.value.push(formattedMessage);
-
-                    // Update unread count if widget is closed
-                    if (!isOpen.value) {
-                      unreadCount.value++;
-                    }
-                  }
+                  addMessage(formattedMessage);
                 });
 
                 // Update last message ID
@@ -484,15 +508,23 @@
             sessionId.value = data.session_id;
             console.log('=== DEBUG: Session ID set to:', sessionId.value);
 
-            // Validate messages before setting
+            // Clear existing messages and processed IDs
+            messages.value = [];
+            processedMessageIds.clear();
+            
+            // Validate messages before adding
             if (data.messages && Array.isArray(data.messages)) {
               const validMessages = data.messages.filter(msg => msg && typeof msg === 'object' && msg.id);
-              messages.value = validMessages.map(msg => ({
-                id: msg.id,
-                message: msg.message || '',
-                from_operator: Boolean(msg.from_operator),
-                created_at: msg.created_at || new Date().toISOString()
-              }));
+              
+              validMessages.forEach(msg => {
+                const formattedMessage = {
+                  id: msg.id,
+                  message: msg.message || '',
+                  from_operator: Boolean(msg.from_operator),
+                  created_at: msg.created_at || new Date().toISOString()
+                };
+                addMessage(formattedMessage);
+              });
             } else {
               messages.value = [];
             }
@@ -740,14 +772,7 @@
           newMessage.value = '';
           sending.value = true;
 
-          const userMessage = {
-            id: Date.now(),
-            message: message,
-            from_operator: false,
-            created_at: new Date().toISOString()
-          };
-
-          messages.value.push(userMessage);
+          // Don't add temporary message - wait for server response and WebSocket event
           scrollToBottom();
 
           try {
@@ -821,31 +846,8 @@
               throw new Error(data.error);
             }
 
-            // Update the temporary message with the server response
-            const messageIndex = messages.value.findIndex(m => m.id === userMessage.id);
-            console.log('=== DEBUG: Message update ===', {
-              messageIndex,
-              userMessageId: userMessage.id,
-              serverResponse: data.message,
-              hasMessage: !!data.message
-            });
-
-            if (messageIndex !== -1 && data.message) {
-              // Ensure the server response has required fields
-              const updatedMessage = {
-                id: data.message.id || userMessage.id,
-                message: data.message.message || userMessage.message,
-                from_operator: data.message.from_operator || false,
-                created_at: data.message.created_at || userMessage.created_at
-              };
-
-              console.log('=== DEBUG: Updating message at index', messageIndex, 'with:', updatedMessage);
-              messages.value[messageIndex] = updatedMessage;
-            } else if (messageIndex === -1) {
-              console.warn('Could not find message to update in array');
-            } else if (!data.message) {
-              console.warn('Server response missing message data');
-            }
+            // Message will be added via WebSocket event listener automatically
+            console.log('=== DEBUG: Message sent successfully, waiting for WebSocket event ===');
 
           } catch (error) {
             console.error('=== DEBUG: Message send error ===', error);
@@ -855,15 +857,9 @@
               stack: error.stack
             });
 
-            // Remove the failed message from array
-            const failedMessageIndex = messages.value.findIndex(m => m.id === userMessage.id);
-            if (failedMessageIndex !== -1) {
-              messages.value.splice(failedMessageIndex, 1);
-            }
-
             // Add error message
             messages.value.push({
-              id: Date.now() + 1,
+              id: Date.now(),
               message: `Failed to send message: ${error.message}. Please try again.`,
               from_operator: true,
               created_at: new Date().toISOString()
@@ -1116,30 +1112,7 @@
                   };
 
                   console.log('=== DEBUG: Formatted new message ===', newMessage);
-
-                  // Check if message doesn't already exist
-                  const exists = messages.value.find(m => m.id === newMessage.id);
-                  console.log('=== DEBUG: Message exists check ===', !!exists);
-
-                  if (!exists) {
-                    console.log('=== DEBUG: ✅ ADDING NEW WEBSOCKET MESSAGE ===');
-                    messages.value.push(newMessage);
-                    console.log('=== DEBUG: New messages count ===', messages.value.length);
-
-                    // Update last message ID for polling
-                    if (newMessage.id > lastMessageId.value) {
-                      lastMessageId.value = newMessage.id;
-                    }
-
-                    setTimeout(() => scrollToBottom(), 100);
-
-                    // Update unread count if widget is closed
-                    if (!isOpen.value) {
-                      unreadCount.value++;
-                    }
-                  } else {
-                    console.log('=== DEBUG: ❌ Message already exists, skipping ===', newMessage.id);
-                  }
+                  addMessage(newMessage);
                 }
               });
             }
@@ -1182,32 +1155,7 @@
                 };
 
                 console.log('=== DEBUG: Formatted widget message ===', newMessage);
-
-                // Check if message doesn't already exist
-                const exists = messages.value.find(m => m.id === newMessage.id);
-                console.log('=== DEBUG: Widget message exists check ===', !!exists);
-
-                if (!exists) {
-                  console.log('=== DEBUG: ✅ ADDING NEW WIDGET MESSAGE ===', newMessage);
-                  messages.value.push(newMessage);
-                  console.log('=== DEBUG: New messages count ===', messages.value.length);
-
-                  // Update last message ID for polling
-                  if (newMessage.id > lastMessageId.value) {
-                    lastMessageId.value = newMessage.id;
-                    console.log('=== DEBUG: Updated lastMessageId ===', lastMessageId.value);
-                  }
-
-                  setTimeout(() => scrollToBottom(), 100);
-
-                  // Update unread count if widget is closed
-                  if (!isOpen.value) {
-                    unreadCount.value++;
-                    console.log('=== DEBUG: Updated unread count ===', unreadCount.value);
-                  }
-                } else {
-                  console.log('=== DEBUG: ❌ Widget message already exists, skipping ===', newMessage.id);
-                }
+                addMessage(newMessage);
               } else {
                 console.log('=== DEBUG: ❌ NO MESSAGE OBJECT IN WIDGET PAYLOAD ===');
                 console.log('=== DEBUG: Widget payload structure issue ===', payload);
