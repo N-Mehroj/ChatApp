@@ -23,6 +23,7 @@ class Chat extends Model
 {
     protected $fillable = [
         'user_id',
+        'widget_session_id',
         'is_new',
     ];
 
@@ -46,6 +47,11 @@ class Chat extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(ChatMessage::class);
+    }
+
+    public function widgetSession(): BelongsTo
+    {
+        return $this->belongsTo(WidgetSession::class, 'widget_session_id');
     }
 
     /**

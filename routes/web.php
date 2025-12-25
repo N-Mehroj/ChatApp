@@ -12,7 +12,7 @@ Route::get('/', function () {
 })->name('home');
 
 // Widget demo routes
-require __DIR__ . '/widget.php';
+require __DIR__.'/widget.php';
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
@@ -48,6 +48,11 @@ Route::prefix('widget')->group(function () {
     Route::get('/chat/demo', function () {
         return view('demo');
     })->name('chat.demo');
+
+    // Widget user test page
+    Route::get('/test', function () {
+        return response()->file(public_path('widget-user-test.html'));
+    })->name('widget.test');
 });
 
 // Serve widget assets
@@ -55,4 +60,4 @@ Route::get('/widget/sdk.js', function () {
     return response()->file(public_path('widget/sdk.js'));
 })->name('widget.sdk');
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';

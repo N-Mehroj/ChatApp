@@ -2,6 +2,7 @@
 (function () {
   'use strict';
 
+
   // Check if Vue is available globally, if not load it
   if (typeof Vue === 'undefined') {
     console.warn('Vue.js is required for ChatWidget. Loading from CDN...');
@@ -131,9 +132,8 @@
         const lastTypingTime = ref(0);
         const typingTimeout = ref(null);
 
-        // Check if running on file:// protocol (demo mode)
-        const isFileProtocol = window.location.protocol === 'file:';
-        const isDemoMode = isFileProtocol || props.apiKey === 'demo_key';
+        // Demo mode only when explicit demo key is provided
+        const isDemoMode = props.apiKey === 'demo_key';
 
         // Style computation functions
         const getBorderRadius = () => {
@@ -270,22 +270,6 @@
         };
 
         const initializeSession = async () => {
-          if (isDemoMode) {
-            // Demo mode - simulate a session
-            sessionId.value = 'demo_session_' + Date.now();
-            messages.value = [
-              {
-                id: 1,
-                message: 'Hello! This is a demo of the chat widget. In demo mode, messages won\'t be saved.',
-                is_from_user: false,
-                created_at: new Date().toISOString()
-              }
-            ];
-            supportAgent.value = { name: 'Demo Agent' };
-            setTimeout(() => scrollToBottom(), 100);
-            return;
-          }
-
           try {
             const response = await fetch(`${props.apiUrl}/session`, {
               method: 'POST',
@@ -297,20 +281,28 @@
               })
             });
 
+            if (!response.ok) {
+              throw new Error('Session init failed');
+            }
+
             const data = await response.json();
             sessionId.value = data.session_id;
             messages.value = data.messages || [];
             supportAgent.value = data.agent || { name: 'Support Team' };
 
+            // Link logged-in user to this session
+            await identifyCurrentUser();
+
+            // Initialize realtime after session established
+            await initRealtime(data.config || {});
+
             setTimeout(() => scrollToBottom(), 100);
           } catch (error) {
             console.error('Failed to initialize session:', error);
-            // Fallback to demo mode on error
-            sessionId.value = 'fallback_session_' + Date.now();
             messages.value = [
               {
                 id: 1,
-                message: 'Sorry, we\'re having trouble connecting to our servers. This is a demo mode.',
+                message: 'We could not connect right now. Please reload or try again.',
                 is_from_user: false,
                 created_at: new Date().toISOString()
               }
@@ -343,6 +335,7 @@
           currentUser.value = { ...currentUser.value, ...userInfo };
           // Recheck access permissions when user changes
           checkUserAccess();
+          identifyCurrentUser();
         };
 
         // Make updateUser available globally for SDK
@@ -378,33 +371,10 @@
           messages.value.push(userMessage);
           scrollToBottom();
 
-          if (isDemoMode) {
-            // Demo mode - simulate a response
-            setTimeout(() => {
-              const demoResponses = [
-                'Thanks for your message! This is a demo response.',
-                'I\'m a demo bot. In production, you\'d be connected to real support.',
-                `You said: "${message}". This is just a demo of the widget functionality.`,
-                'For real chat functionality, please serve this page over HTTP/HTTPS.',
-                'Demo mode: Your messages aren\'t being saved or sent to real support.'
-              ];
-
-              const randomResponse = demoResponses[Math.floor(Math.random() * demoResponses.length)];
-
-              messages.value.push({
-                id: Date.now() + 1,
-                message: randomResponse,
-                is_from_user: false,
-                created_at: new Date().toISOString()
-              });
-
-              scrollToBottom();
-              sending.value = false;
-            }, 1000);
-            return;
-          }
-
           try {
+            // If we haven't identified the user yet, try now (best-effort)
+            await identifyCurrentUser();
+
             // Prepare secure payload with user information
             const payload = {
               api_key: props.apiKey,
@@ -459,6 +429,115 @@
             scrollToBottom();
           } finally {
             sending.value = false;
+          }
+        };
+
+        // Identify the current user (logged-in or provided by SDK) and attach to session
+        async function identifyCurrentUser() {
+          if (!userConfig.sendToBackend || !sessionId.value) {
+            return;
+          }
+
+          const info = window.ChatWidget?.getCurrentUserInfo
+            ? window.ChatWidget.getCurrentUserInfo()
+            : currentUser.value;
+
+          // If no useful info, skip
+          if (!info || (!info.isLoggedIn && !info.email && !info.name)) {
+            return;
+          }
+
+          const payload = {
+            api_key: props.apiKey,
+            session_id: sessionId.value,
+            name: info.name || `${info.first_name || ''} ${info.last_name || ''}`.trim() || null,
+            email: info.email || null,
+            phone: info.phone || null,
+            notes: info.role ? `Role: ${info.role}` : null,
+            metadata: {
+              user_id: info.id || null,
+              role: info.role || null,
+              page_url: window.location.href,
+            },
+          };
+
+          try {
+            const headers = window.ChatWidget?.getSecureHeaders
+              ? window.ChatWidget.getSecureHeaders()
+              : {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              };
+
+
+            await fetch(`${props.apiUrl}/identify-user`, {
+              method: 'POST',
+              headers,
+              credentials: 'same-origin',
+              body: JSON.stringify(payload),
+            });
+          } catch (error) {
+            console.warn('User identification failed (non-blocking):', error);
+          }
+        }
+
+        // Realtime (Reverb) setup
+        let echoInstance = null;
+
+        const loadScript = (src) => {
+          return new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) {
+              resolve();
+              return;
+            }
+            const s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            s.onload = () => resolve();
+            s.onerror = (e) => reject(e);
+            document.head.appendChild(s);
+          });
+        };
+
+        const initRealtime = async (config = {}) => {
+          if (echoInstance || !sessionId.value) return;
+
+          try {
+            const wsUrl = config.ws_url || 'ws://' + window.location.hostname + ':8080';
+            const appKey = config.app_key || props.pusherKey || props.reverbKey || '';
+
+            if (!appKey) {
+              console.warn('Realtime disabled: missing app key');
+              return;
+            }
+
+            const url = new URL(wsUrl.replace('ws://', 'http://').replace('wss://', 'https://'));
+            const wsHost = url.hostname;
+            const wsPort = url.port || (url.protocol === 'https:' ? 443 : 80);
+            const forceTLS = url.protocol === 'https:';
+
+            await loadScript('https://cdn.jsdelivr.net/npm/pusher-js@8.4.0/dist/web/pusher.min.js');
+            await loadScript('https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js');
+
+            echoInstance = new window.Echo({
+              broadcaster: 'pusher',
+              key: appKey,
+              wsHost,
+              wsPort,
+              wssPort: wsPort,
+              forceTLS,
+              disableStats: true,
+              enabledTransports: forceTLS ? ['ws', 'wss'] : ['ws'],
+            });
+
+            echoInstance.channel(`widget.session.${sessionId.value}`)
+              .listen('.widget.message.sent', (payload) => {
+                if (!payload || !payload.message) return;
+                messages.value.push(payload.message);
+                scrollToBottom();
+              });
+          } catch (err) {
+            console.warn('Realtime init failed (non-blocking):', err);
           }
         };
 

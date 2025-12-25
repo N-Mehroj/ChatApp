@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\MessageSent;
+use App\Events\WidgetMessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Chat;
 use App\Models\ChatMessage;
@@ -25,7 +26,7 @@ class WidgetController extends Controller
         if ($user) {
             // Get or create chat for authenticated user
             $chat = Chat::firstOrCreate([
-                'user_id' => $user->id
+                'user_id' => $user->id,
             ]);
 
             // Get random support operator info
@@ -55,7 +56,7 @@ class WidgetController extends Controller
                 'allow_guests' => false,
                 'require_auth' => true,
                 'ws_url' => config('broadcasting.connections.reverb.url', 'ws://localhost:8080'),
-            ]
+            ],
         ]);
     }
 
@@ -84,15 +85,29 @@ class WidgetController extends Controller
             $sessionId = $request->session_id ?? Str::uuid();
             $visitorId = $request->visitor_id ?? $request->ip();
 
-            $session = WidgetSession::firstOrCreate([
+            // Check if user is authenticated
+            $authenticatedUser = auth()->user();
+
+            $sessionData = [
                 'session_id' => $sessionId,
                 'merchant_id' => $merchant->id,
                 'visitor_id' => $visitorId,
-            ], [
+            ];
+
+            $defaultData = [
                 'visitor_ip' => $request->ip(),
                 'visitor_user_agent' => $request->userAgent(),
                 'is_active' => true,
-            ]);
+            ];
+
+            // If user is authenticated, store user info
+            if ($authenticatedUser) {
+                $sessionData['user_id'] = $authenticatedUser->id;
+                $defaultData['visitor_name'] = $authenticatedUser->display_name;
+                $defaultData['visitor_email'] = $authenticatedUser->email;
+            }
+
+            $session = WidgetSession::firstOrCreate($sessionData, $defaultData);
 
             // Get or create chat for this session
             $chat = Chat::firstOrCreate([
@@ -118,9 +133,19 @@ class WidgetController extends Controller
                 'session_id' => $sessionId,
                 'chat_id' => $chat->id,
                 'messages' => $messages,
+                'user' => $authenticatedUser ? [
+                    'id' => $authenticatedUser->id,
+                    'name' => $authenticatedUser->display_name,
+                    'email' => $authenticatedUser->email,
+                    'avatar' => $authenticatedUser->avatar_url,
+                ] : null,
                 'agent' => [
                     'name' => $merchant->name,
                     'avatar' => $merchant->avatar ?? null,
+                ],
+                'config' => [
+                    'ws_url' => config('broadcasting.connections.reverb.url', 'ws://localhost:8080'),
+                    'app_key' => config('broadcasting.connections.reverb.app_key'),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -185,8 +210,8 @@ class WidgetController extends Controller
                 'updated_at' => now(),
             ]);
 
-            // Broadcast to merchant (support agent)
-            broadcast(new MessageSent($message, $chat))->toOthers();
+            // Broadcast widget message to support agents
+            broadcast(new WidgetMessageSent($message, $session))->toOthers();
 
             return response()->json([
                 'message' => [
@@ -347,15 +372,15 @@ class WidgetController extends Controller
     /**
      * Get messages for Vue.js widget
      */
-    public function getMessages(Request $request, Chat $chat): \Illuminate\Http\JsonResponse
+    public function getChatMessages(Request $request, Chat $chat): \Illuminate\Http\JsonResponse
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => 'Authentication required'], 401);
         }
 
-        if ($chat->user_id !== $user->id && !$user->isOperatorOrSupport()) {
+        if ($chat->user_id !== $user->id && ! $user->isOperatorOrSupport()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -381,9 +406,9 @@ class WidgetController extends Controller
                         'avatar_url' => $message->user->avatar_url,
                         'role' => $message->user->role?->value ?? 'user',
                         'is_online' => $message->user->is_online,
-                    ]
+                    ],
                 ];
-            })
+            }),
         ]);
     }
 
@@ -398,11 +423,11 @@ class WidgetController extends Controller
 
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => 'Authentication required'], 401);
         }
 
-        if ($chat->user_id !== $user->id && !$user->isOperatorOrSupport()) {
+        if ($chat->user_id !== $user->id && ! $user->isOperatorOrSupport()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -432,8 +457,8 @@ class WidgetController extends Controller
                     'avatar_url' => $message->user->avatar_url,
                     'role' => $message->user->role?->value ?? 'user',
                     'is_online' => $message->user->is_online,
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -444,11 +469,11 @@ class WidgetController extends Controller
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['error' => 'Authentication required'], 401);
         }
 
-        if ($chat->user_id !== $user->id && !$user->isOperatorOrSupport()) {
+        if ($chat->user_id !== $user->id && ! $user->isOperatorOrSupport()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -460,6 +485,140 @@ class WidgetController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Identify user for widget session
+     */
+    public function identifyUser(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'api_key' => 'required|string',
+            'session_id' => 'required|string',
+            'name' => 'nullable|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:20',
+            'notes' => 'nullable|string|max:500',
+            'metadata' => 'nullable|array',
+        ]);
+
+        try {
+            // Find merchant by API key
+            $merchant = User::where('api_key', $request->api_key)
+                ->where('role', 'merchant')
+                ->first();
+
+            if (! $merchant) {
+                return response()->json(['error' => 'Invalid API key'], 401);
+            }
+
+            // Find widget session
+            $session = WidgetSession::where('session_id', $request->session_id)
+                ->where('merchant_id', $merchant->id)
+                ->first();
+
+            if (! $session) {
+                return response()->json(['error' => 'Session not found'], 404);
+            }
+
+            // Update session with user details
+            $session->update([
+                'visitor_name' => $request->name,
+                'visitor_email' => $request->email,
+                'visitor_phone' => $request->phone,
+                'visitor_notes' => $request->notes,
+                'visitor_metadata' => $request->metadata,
+                'last_activity' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'User identified successfully',
+                'session' => [
+                    'id' => $session->session_id,
+                    'visitor_name' => $session->visitor_name,
+                    'visitor_email' => $session->visitor_email,
+                    'visitor_phone' => $session->visitor_phone,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Widget user identification failed: ' . $e->getMessage());
+
+            return response()->json([
+                'error' => 'Failed to identify user',
+            ], 500);
+        }
+    }
+
+    /**
+     * Send reply to widget session (for support agents)
+     */
+    public function sendReply(Request $request, string $sessionId): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'message' => 'required|string|max:1000',
+        ]);
+
+        try {
+            $user = $request->user();
+
+            if (! $user || ! $user->isSupport()) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+
+            // Find widget session
+            $session = WidgetSession::where('session_id', $sessionId)->first();
+
+            if (! $session) {
+                return response()->json(['error' => 'Session not found'], 404);
+            }
+
+            // Find the chat
+            $chat = Chat::where('widget_session_id', $session->id)->first();
+
+            if (! $chat) {
+                return response()->json(['error' => 'Chat not found'], 404);
+            }
+
+            // Create message from support agent
+            $message = ChatMessage::create([
+                'chat_id' => $chat->id,
+                'user_id' => $user->id, // Support agent
+                'message' => $request->message,
+                'widget_session_id' => $session->id,
+            ]);
+
+            // Update session activity
+            $session->update(['last_activity' => now()]);
+
+            // Update chat with latest message
+            $chat->update([
+                'latest_message_id' => $message->id,
+                'updated_at' => now(),
+            ]);
+
+            // Broadcast to widget
+            broadcast(new WidgetMessageSent($message, $session))->toOthers();
+
+            return response()->json([
+                'message' => [
+                    'id' => $message->id,
+                    'message' => $message->message,
+                    'is_from_user' => false,
+                    'created_at' => $message->created_at->toISOString(),
+                    'user' => [
+                        'name' => $user->display_name,
+                        'avatar' => $user->avatar_url,
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Widget reply send failed: ' . $e->getMessage());
+
+            return response()->json([
+                'error' => 'Failed to send reply',
+            ], 500);
+        }
     }
 
     /**
@@ -496,7 +655,7 @@ class WidgetController extends Controller
                     'is_online' => $operator->is_online,
                     'role' => $operator->role?->value ?? 'support',
                 ];
-            })
+            }),
         ]);
     }
 }

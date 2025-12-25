@@ -24,10 +24,10 @@ class ChatController extends Controller
         $user = Auth::user();
 
         // For support users, limit to recent chats to reduce data load
-        $chatsQuery = Chat::with(['user', 'lastMessage']);
+        $chatsQuery = Chat::with(['user', 'lastMessage', 'widgetSession.user']);
 
         if ($user->isSupport()) {
-            // Support users see all chats but limited to 50 most recent
+            // Support users see all chats (regular + widget) but limited to 50 most recent
             $chatsQuery = $chatsQuery->latest('updated_at')->limit(50);
         } else {
             // Regular users see only their own chats
@@ -36,9 +36,20 @@ class ChatController extends Controller
 
         $chats = $chatsQuery->get();
 
-        // Add unread count for each chat
+        // Add widget session data and unread count for each chat
         $chats->each(function ($chat) use ($user) {
             $chat->unread_count = $chat->getUnreadCount($user);
+
+            // Add widget session info if exists
+            if ($chat->widgetSession) {
+                $chat->is_widget_chat = true;
+                $chat->visitor_name = $chat->widgetSession->visitor_name ?? 'Anonymous';
+                $chat->visitor_email = $chat->widgetSession->visitor_email;
+                $chat->visitor_phone = $chat->widgetSession->visitor_phone;
+                $chat->widget_user = $chat->widgetSession->user; // Login qilgan user
+            } else {
+                $chat->is_widget_chat = false;
+            }
         });
 
         return Inertia::render('Chat/Index', [
@@ -74,7 +85,7 @@ class ChatController extends Controller
         $users = $usersQuery->get();
 
         return Inertia::render('Chat/Show', [
-            'chat' => $chat->load(['user', 'lastMessage']),
+            'chat' => $chat->load(['user', 'lastMessage', 'widgetSession']),
             'messages' => $messages,
             'currentUser' => $user,
             'users' => $users,
@@ -152,7 +163,7 @@ class ChatController extends Controller
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
             'message_id' => $message->id,
-            'channel' => 'chat.'.$chat->id,
+            'channel' => 'chat.' . $chat->id,
             'user_id' => $user->id,
             'from_operator' => $user->isSupport(),
         ]);

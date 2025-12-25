@@ -127,6 +127,7 @@ class User extends Authenticatable
             'telegram_id' => 'int',
             'additional_telegram_ids' => 'array',
             'role' => UserRole::class,
+            'last_activity' => 'datetime',
         ];
     }
 
@@ -185,7 +186,7 @@ class User extends Authenticatable
     public function getDisplayNameAttribute(): string
     {
         if ($this->first_name && $this->last_name) {
-            return trim($this->first_name . ' ' . $this->last_name);
+            return trim($this->first_name.' '.$this->last_name);
         }
 
         if ($this->first_name) {
@@ -205,7 +206,7 @@ class User extends Authenticatable
     public function getAvatarUrlAttribute(): string
     {
         if ($this->image) {
-            return asset('storage/' . $this->image);
+            return asset('storage/'.$this->image);
         }
 
         $name = urlencode($this->display_name);
@@ -222,7 +223,12 @@ class User extends Authenticatable
             return false;
         }
 
-        return $this->last_activity->gt(now()->subMinutes(5));
+        // Ensure last_activity is a Carbon instance
+        $lastActivity = $this->last_activity instanceof Carbon
+            ? $this->last_activity
+            : Carbon::parse($this->last_activity);
+
+        return $lastActivity->gt(now()->subMinutes(5));
     }
 
     /**

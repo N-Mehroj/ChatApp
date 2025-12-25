@@ -411,7 +411,7 @@
         loadCSS: function () {
             const link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.href = this.getAssetUrl('/assets/widget.css');
+            link.href = 'http://127.0.0.1:8000/assets/widget.css';
             link.onerror = () => {
                 this.log('Failed to load CSS, using inline styles...');
                 this.addInlineStyles();
@@ -541,7 +541,8 @@
         // Load Vue application
         loadVueApp: function () {
             const script = document.createElement('script');
-            script.src = this.getAssetUrl('/assets/widget.js');
+            const base = (this.config.widgetUrl || '/widget').replace(/\/$/, '');
+            script.src = `${base}/assets/widget.js`;
             this.log('Loading JS from: ' + script.src);
             script.onload = () => {
                 this.log('Vue app loaded');

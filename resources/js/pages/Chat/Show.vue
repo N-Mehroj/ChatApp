@@ -222,16 +222,36 @@ async function sendMessage() {
   newMessage.value = ''
 
   try {
-    const response = await fetch(`/chat/${chat.value.id}/message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-      },
-      body: JSON.stringify({
-        message: messageText,
-      }),
-    })
+    let response;
+    
+    // Check if this is a widget chat
+    if (chat.value.widget_session_id) {
+      // Widget chat - use widget reply endpoint
+      const session = chat.value.widget_session; // Assuming we have this data
+      response = await fetch(`/api/widget/session/${session?.session_id || 'unknown'}/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Authorization': 'Bearer ' + (localStorage.getItem('auth_token') || ''),
+        },
+        body: JSON.stringify({
+          message: messageText,
+        }),
+      });
+    } else {
+      // Regular chat
+      response = await fetch(`/chat/${chat.value.id}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          message: messageText,
+        }),
+      });
+    }
 
     const data = await response.json()
     

@@ -8,7 +8,7 @@ Route::prefix('widget')->group(function () {
     // Vue.js widget authenticated routes
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/session', [WidgetController::class, 'session']);
-        Route::get('/chats/{chat}/messages', [WidgetController::class, 'getMessages']);
+        Route::get('/chats/{chat}/messages', [WidgetController::class, 'getChatMessages']);
         Route::post('/chats/{chat}/messages', [WidgetController::class, 'sendWidgetMessage']);
         Route::patch('/chats/{chat}/messages/{message}/read', [WidgetController::class, 'markAsRead']);
         Route::get('/operators', [WidgetController::class, 'operators']);
@@ -21,6 +21,12 @@ Route::prefix('widget')->group(function () {
     Route::post('/typing', [WidgetController::class, 'handleTyping']);
     Route::post('/end-session', [WidgetController::class, 'endSession']);
 
+    // User identification for widget
+    Route::post('/identify-user', [WidgetController::class, 'identifyUser']);
+
+    // Support response to widget (auth required)
+    Route::middleware('auth:sanctum')->post('/session/{sessionId}/reply', [WidgetController::class, 'sendReply']);
+
     // Public config
     Route::get('/config', [WidgetController::class, 'config']);
 });
@@ -28,11 +34,12 @@ Route::prefix('widget')->group(function () {
 // User info API (for authenticated users)
 Route::middleware('auth')->get('/user/info', function () {
     $user = auth()->user();
+
     return response()->json([
         'id' => $user->id,
         'name' => $user->name ?? ($user->first_name . ' ' . $user->last_name),
         'email' => $user->email,
         'role' => $user->role?->value ?? 'user',
-        'isLoggedIn' => true
+        'isLoggedIn' => true,
     ]);
 });

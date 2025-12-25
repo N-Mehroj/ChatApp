@@ -107,9 +107,18 @@
           <!-- Chat Info -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-1">
-              <h3 class="font-medium text-gray-900 dark:text-white text-sm truncate">
-                {{ getChatDisplayName(chat) }}
-              </h3>
+              <div class="flex items-center flex-1 min-w-0 mr-2">
+                <h3 class="font-medium text-gray-900 dark:text-white text-sm truncate">
+                  {{ getChatDisplayName(chat) }}
+                </h3>
+                <!-- Widget Chat Badge -->
+                <span
+                  v-if="chat.is_widget_chat"
+                  class="ml-2 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full"
+                >
+                  Widget
+                </span>
+              </div>
               <div class="flex items-center ml-2">
                 <!-- Unread Message Count Badge -->
                 <span
@@ -134,6 +143,13 @@
                 >
                   {{ formatTime(chat.last_message.created_at) }}
                 </span>
+              </div>
+            </div>
+            <!-- Widget user info -->
+            <div v-if="chat.is_widget_chat && (chat.visitor_email || chat.visitor_phone)" class="mb-1">
+              <div class="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                <span v-if="chat.visitor_email">{{ chat.visitor_email }}</span>
+                <span v-if="chat.visitor_phone">{{ chat.visitor_phone }}</span>
               </div>
             </div>
             <p
@@ -1185,8 +1201,25 @@ const getUserDisplayName = (user) => {
 };
 
 const getChatDisplayName = (chat) => {
-  if (!chat || !chat.user) return "Suhbat";
+  if (!chat) return "Suhbat";
+  
+  // Widget chat bo'lsa
+  if (chat.is_widget_chat) {
+    if (chat.widget_user) {
+      // Login qilgan user ma'lumotlari
+      return `${getUserDisplayName(chat.widget_user)} (Widget)`;
+    } else if (chat.visitor_name) {
+      // Visitor name berilgan bo'lsa
+      return `${chat.visitor_name} (Widget)`;
+    } else {
+      // Anonymous visitor
+      return "Anonymous Visitor (Widget)";
+    }
+  }
 
+  // Oddiy chat
+  if (!chat.user) return "Suhbat";
+  
   // For support tickets, always show the customer (chat.user)
   const customer = chat.user;
   return getUserDisplayName(customer);
