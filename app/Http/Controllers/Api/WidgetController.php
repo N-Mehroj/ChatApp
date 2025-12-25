@@ -178,10 +178,11 @@ class WidgetController extends Controller
                 'last_message' => $messages->last()
             ]);
 
-            $reverbOptions = config('broadcasting.connections.reverb.options', []);
-            $reverbScheme = $reverbOptions['scheme'] ?? 'https';
-            $reverbHost = $reverbOptions['host'] ?? '127.0.0.1';
-            $reverbPort = $reverbOptions['port'] ?? ($reverbScheme === 'https' ? 443 : 80);
+            // WebSocket/Reverb configuration
+            $reverbHost = config('reverb.servers.reverb.host', '127.0.0.1');
+            $reverbPort = config('reverb.servers.reverb.port', 8080);
+            $reverbKey = config('broadcasting.connections.reverb.key') ?? env('REVERB_APP_KEY');
+            $reverbScheme = env('REVERB_SCHEME', 'http');
             $wsProtocol = $reverbScheme === 'https' ? 'wss' : 'ws';
 
             return response()->json([
@@ -200,8 +201,9 @@ class WidgetController extends Controller
                 ],
                 'config' => [
                     'ws_url' => sprintf('%s://%s:%s', $wsProtocol, $reverbHost, $reverbPort),
-                    'app_key' => config('broadcasting.connections.reverb.key')
-                        ?? config('broadcasting.connections.pusher.key'),
+                    'app_key' => $reverbKey,
+                    'chat_id' => $chat->id,
+                    'session_id' => $sessionId,
                 ],
             ]);
         } catch (\Exception $e) {
@@ -290,8 +292,11 @@ class WidgetController extends Controller
                 'updated_at' => now(),
             ]);
 
-            // Broadcast widget message to support agents
+            // Broadcast widget message to support agents and other connected clients
             broadcast(new WidgetMessageSent($message, $session))->toOthers();
+
+            // Also broadcast on the main chat channel for real-time updates
+            broadcast(new \App\Events\MessageSent($message))->toOthers();
 
             return response()->json([
                 'message' => [

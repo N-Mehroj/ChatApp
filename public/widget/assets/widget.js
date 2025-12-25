@@ -786,11 +786,24 @@
         };
 
         const initRealtime = async (config = {}) => {
-          if (echoInstance || !sessionId.value) return;
+          if (echoInstance || !sessionId.value) {
+            console.log('=== DEBUG: Realtime already initialized or no session ID ===');
+            return;
+          }
+
+          console.log('=== DEBUG: Initializing WebSocket/Reverb ===', config);
 
           try {
             const wsUrl = config.ws_url || 'ws://' + window.location.hostname + ':8080';
             const appKey = config.app_key || props.pusherKey || props.reverbKey || '';
+            const chatId = config.chat_id;
+
+            console.log('=== DEBUG: WebSocket Config ===', {
+              wsUrl,
+              appKey,
+              chatId,
+              sessionId: sessionId.value
+            });
 
             if (!appKey) {
               console.warn('Realtime disabled: missing app key');
@@ -802,11 +815,21 @@
             const wsPort = url.port || (url.protocol === 'https:' ? 443 : 80);
             const forceTLS = url.protocol === 'https:';
 
+            console.log('=== DEBUG: Parsed WebSocket URL ===', {
+              wsHost,
+              wsPort,
+              forceTLS,
+              protocol: url.protocol
+            });
+
+            // Load required scripts
             await loadScript('https://cdn.jsdelivr.net/npm/pusher-js@8.4.0/dist/web/pusher.min.js');
             await loadScript('https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js');
 
+            console.log('=== DEBUG: Scripts loaded, creating Echo instance ===');
+
             echoInstance = new window.Echo({
-              broadcaster: 'pusher',
+              broadcaster: 'reverb',
               key: appKey,
               wsHost,
               wsPort,
@@ -816,13 +839,77 @@
               enabledTransports: forceTLS ? ['ws', 'wss'] : ['ws'],
             });
 
+            console.log('=== DEBUG: Echo instance created ===', echoInstance);
+
+            // Listen for connection events
+            if (window.Pusher && echoInstance.connector && echoInstance.connector.pusher) {
+              const pusher = echoInstance.connector.pusher;
+
+              pusher.connection.bind('connected', () => {
+                console.log('=== DEBUG: WebSocket connected successfully ===');
+              });
+
+              pusher.connection.bind('disconnected', () => {
+                console.log('=== DEBUG: WebSocket disconnected ===');
+              });
+
+              pusher.connection.bind('error', (error) => {
+                console.error('=== DEBUG: WebSocket connection error ===', error);
+              });
+            }
+
+            // Listen for messages on chat channel  
+            if (chatId) {
+              console.log('=== DEBUG: Subscribing to chat channel ===', `chat.${chatId}`);
+
+              echoInstance.channel(`chat.${chatId}`)
+                .listen('.MessageSent', (payload) => {
+                  console.log('=== DEBUG: New message received via WebSocket ===', payload);
+                  if (payload && payload.message) {
+                    const newMessage = {
+                      id: payload.message.id,
+                      message: payload.message.message,
+                      from_operator: payload.message.from_operator,
+                      created_at: payload.message.created_at
+                    };
+                    messages.value.push(newMessage);
+                    scrollToBottom();
+
+                    // Update unread count if widget is closed
+                    if (!isOpen.value) {
+                      unreadCount.value++;
+                    }
+                  }
+                });
+            }
+
+            // Also listen on widget session channel for backward compatibility
+            console.log('=== DEBUG: Subscribing to widget session channel ===', `widget.session.${sessionId.value}`);
+
             echoInstance.channel(`widget.session.${sessionId.value}`)
               .listen('.widget.message.sent', (payload) => {
-                if (!payload || !payload.message) return;
-                messages.value.push(payload.message);
-                scrollToBottom();
+                console.log('=== DEBUG: Widget message received ===', payload);
+                if (payload && payload.message) {
+                  const newMessage = {
+                    id: payload.message.id,
+                    message: payload.message.message,
+                    from_operator: payload.message.from_operator,
+                    created_at: payload.message.created_at
+                  };
+                  messages.value.push(newMessage);
+                  scrollToBottom();
+
+                  // Update unread count if widget is closed
+                  if (!isOpen.value) {
+                    unreadCount.value++;
+                  }
+                }
               });
+
+            console.log('=== DEBUG: WebSocket/Reverb initialized successfully ===');
+
           } catch (err) {
+            console.error('=== DEBUG: Realtime init failed ===', err);
             console.warn('Realtime init failed (non-blocking):', err);
           }
         };

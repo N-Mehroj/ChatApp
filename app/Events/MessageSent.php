@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\ChatMessage;
+use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -37,7 +38,8 @@ class MessageSent implements ShouldBroadcastNow
     public function broadcastOn(): array
     {
         $channels = [
-            new PrivateChannel('chat.' . $this->message->chat_id),
+            new Channel('chat.' . $this->message->chat_id), // Public channel for widgets
+            new PrivateChannel('chat.' . $this->message->chat_id), // Private channel for authenticated users
         ];
 
         Log::info('Broadcasting to channels', [
