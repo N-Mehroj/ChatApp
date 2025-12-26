@@ -3,16 +3,13 @@
 use App\Http\Controllers\ChatController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use Laravel\Fortify\Features;
 
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
-    ]);
+    return redirect()->route('login');
 })->name('home');
 
 // Widget demo routes
-require __DIR__ . '/widget.php';
+require __DIR__.'/widget.php';
 
 Route::get('dashboard', function () {
     return Inertia::render('Dashboard');
@@ -60,4 +57,4 @@ Route::get('/widget/sdk.js', function () {
     return response()->file(public_path('widget/sdk.js'));
 })->name('widget.sdk');
 
-require __DIR__ . '/settings.php';
+require __DIR__.'/settings.php';

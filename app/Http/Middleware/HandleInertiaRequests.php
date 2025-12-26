@@ -25,7 +25,7 @@ class HandleInertiaRequests extends Middleware
         if (Auth::check()) {
             $user = Auth::user();
 
-            $menuItems = AdminMenu::with(['children' => fn(HasMany $query) => $query->active()->orderBy('sort')])
+            $menuItems = AdminMenu::with(['children' => fn (HasMany $query) => $query->active()->orderBy('sort')])
                 ->active()
                 ->where('parent_id', null)
                 ->orderBy('sort')
@@ -33,8 +33,9 @@ class HandleInertiaRequests extends Middleware
                 ->toArray();
 
             foreach ($menuItems as $key => &$menuItem) {
-                if ($menuItem['permission'] && !$user->hasPermissionTo($menuItem['permission']) && !$user->hasRole('admin')) {
+                if ($menuItem['permission'] && ! $user->hasPermissionTo($menuItem['permission']) && ! $user->hasRole('admin')) {
                     unset($menuItems[$key]);
+
                     continue;
                 }
 
@@ -42,15 +43,16 @@ class HandleInertiaRequests extends Middleware
                     $menuItem['subMenu'] = $menuItem['children'];
 
                     foreach ($menuItem['subMenu'] as $subItemKey => $subItem) {
-                        if ($subItem['permission'] && !$user->hasPermissionTo($subItem['permission']) && !$user->hasRole('admin')) {
+                        if ($subItem['permission'] && ! $user->hasPermissionTo($subItem['permission']) && ! $user->hasRole('admin')) {
                             unset($menuItem['subMenu'][$subItemKey]);
+
                             continue;
                         }
 
                         $pageUrl = $request->getRequestUri();
 
-                        $firstPattern = '/' . str_replace('/', '\/', $subItem['link']) . '\/[0-9]\/edit/';
-                        $secondPattern = '/' . str_replace('/', '\/', $subItem['link']) . '\/create/';
+                        $firstPattern = '/'.str_replace('/', '\/', $subItem['link']).'\/[0-9]\/edit/';
+                        $secondPattern = '/'.str_replace('/', '\/', $subItem['link']).'\/create/';
 
                         if ($pageUrl == $subItem['link']) {
                             $menuItem['activeDropdown'] = true;
@@ -71,7 +73,9 @@ class HandleInertiaRequests extends Middleware
 
         return array_merge(parent::share($request), [
             'sideMenu' => $menuItems,
-            'auth' => $user
+            'auth' => [
+                'user' => $user,
+            ],
         ]);
     }
 }

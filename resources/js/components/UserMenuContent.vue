@@ -13,7 +13,7 @@ import { Link, router } from '@inertiajs/vue3';
 import { LogOut, Settings } from 'lucide-vue-next';
 
 interface Props {
-    user: User;
+    user?: User | null;
 }
 
 const handleLogout = () => {
@@ -24,7 +24,7 @@ defineProps<Props>();
 </script>
 
 <template>
-    <DropdownMenuLabel class="p-0 font-normal">
+    <DropdownMenuLabel v-if="user" class="p-0 font-normal">
         <div class="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
             <UserInfo :user="user" :show-email="true" />
         </div>
