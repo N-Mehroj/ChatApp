@@ -16,6 +16,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Spatie\Permission\Traits\HasRoles;
 
 /**
  * @property int $id
@@ -54,7 +55,7 @@ use Illuminate\Support\Str;
  */
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     protected $fillable = [
         'first_name',
@@ -340,6 +341,6 @@ class User extends Authenticatable
      */
     public function getMerchantNameAttribute(): ?string
     {
-        return $this->merchant?->name;
+        return $this->merchant?->name_ru ?? $this->merchant?->name_uz;
     }
 }

@@ -29,14 +29,14 @@ class ChatController extends Controller
             'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
             'user.department:id,name',
             'user.organization:id,name',
-            'user.merchant:id,name,user_id',
+            'user.merchant:id,name_ru,name_uz,user_id',
             'lastMessage:id,chat_id,user_id,message,created_at,from_operator,read_at',
             'lastMessage.user:id,first_name,last_name',
             'widgetSession:id,session_id,visitor_name,visitor_email,visitor_phone,user_id',
             'widgetSession.user:id,first_name,last_name,email,department_id,organization_id,position,phone,username,is_app_installed,created_at',
             'widgetSession.user.department:id,name',
             'widgetSession.user.organization:id,name',
-            'widgetSession.user.merchant:id,name,user_id'
+            'widgetSession.user.merchant:id,name_ru,name_uz,user_id',
         ])
             ->withCount(['messages', 'messages as unread_messages_count' => function ($query) use ($user) {
                 $query->where('user_id', '!=', $user->id)->whereNull('read_at');
@@ -87,13 +87,13 @@ class ChatController extends Controller
             'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
             'user.department:id,name',
             'user.organization:id,name',
-            'user.merchant:id,name,user_id',
+            'user.merchant:id,name_ru,name_uz,user_id',
             'lastMessage:id,chat_id,user_id,message,created_at,from_operator',
             'widgetSession:id,session_id,visitor_name,visitor_email,visitor_phone,user_id',
             'widgetSession.user:id,first_name,last_name,email,department_id,organization_id,position,phone,username,is_app_installed,created_at',
             'widgetSession.user.department:id,name',
             'widgetSession.user.organization:id,name',
-            'widgetSession.user.merchant:id,name,user_id'
+            'widgetSession.user.merchant:id,name_ru,name_uz,user_id',
         ]);
 
         // Single optimized query for messages with user data
@@ -113,7 +113,7 @@ class ChatController extends Controller
             $users = User::with([
                 'department:id,name',
                 'organization:id,name',
-                'merchant:id,name,user_id'
+                'merchant:id,name_ru,name_uz,user_id',
             ])
                 ->select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity', 'department_id', 'organization_id', 'position', 'phone', 'username', 'is_app_installed', 'created_at')
                 ->where('id', '!=', $user->id)
@@ -170,7 +170,7 @@ class ChatController extends Controller
 
     public function sendMessage(Request $request, Chat $chat): JsonResponse
     {
-        
+
         $request->validate([
             'message' => 'required|string|max:1000',
         ]);
@@ -234,7 +234,7 @@ class ChatController extends Controller
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
             'message_id' => $message->id,
-            'channel' => 'chat.' . $chat->id,
+            'channel' => 'chat.'.$chat->id,
             'user_id' => $user->id,
             'from_operator' => $user->isSupport(),
         ]);
@@ -309,8 +309,8 @@ class ChatController extends Controller
                     'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
                     'user.department:id,name',
                     'user.organization:id,name',
-                    'user.merchant:id,name,user_id',
-                    'lastMessage:id,chat_id,user_id,message,created_at,from_operator'
+                    'user.merchant:id,name_ru,name_uz,user_id',
+                    'lastMessage:id,chat_id,user_id,message,created_at,from_operator',
                 ])
                     ->latest('updated_at')
                     ->limit(100) // Limit for performance
@@ -321,8 +321,8 @@ class ChatController extends Controller
                     'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
                     'user.department:id,name',
                     'user.organization:id,name',
-                    'user.merchant:id,name,user_id',
-                    'lastMessage:id,chat_id,user_id,message,created_at,from_operator'
+                    'user.merchant:id,name_ru,name_uz,user_id',
+                    'lastMessage:id,chat_id,user_id,message,created_at,from_operator',
                 ])
                     ->where('user_id', $user->id)
                     ->latest('updated_at')
@@ -345,7 +345,7 @@ class ChatController extends Controller
             $users = User::with([
                 'department:id,name',
                 'organization:id,name',
-                'merchant:id,name,user_id'
+                'merchant:id,name_ru,name_uz,user_id',
             ])
                 ->select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity', 'department_id', 'organization_id', 'position', 'phone', 'username', 'is_app_installed', 'created_at')
                 ->where('id', '!=', $user->id)
@@ -356,7 +356,7 @@ class ChatController extends Controller
             $users = User::with([
                 'department:id,name',
                 'organization:id,name',
-                'merchant:id,name,user_id'
+                'merchant:id,name_ru,name_uz,user_id',
             ])
                 ->select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity', 'department_id', 'organization_id', 'position', 'phone', 'username', 'is_app_installed', 'created_at')
                 ->where('id', '!=', $user->id)
