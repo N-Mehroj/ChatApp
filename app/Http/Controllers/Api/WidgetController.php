@@ -515,6 +515,10 @@ class WidgetController extends Controller
      */
     public function sendWidgetMessage(Request $request, Chat $chat): \Illuminate\Http\JsonResponse
     {
+        Log::info('sendMessage called', [
+            'chat_id' => $chat->id,
+            'request_data' => $request->all(),
+        ]);
         $request->validate([
             'message' => 'required|string|max:1000',
         ]);

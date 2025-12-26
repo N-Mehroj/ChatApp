@@ -153,6 +153,7 @@ class ChatController extends Controller
 
     public function sendMessage(Request $request, Chat $chat): JsonResponse
     {
+        
         $request->validate([
             'message' => 'required|string|max:1000',
         ]);

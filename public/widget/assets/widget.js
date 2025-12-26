@@ -169,38 +169,38 @@
         const pollingIntervalMs = ref(2000); // 2s - less frequent when WebSocket is primary
         const websocketConnected = ref(false);
         const useWebsocketFallback = ref(true);
-        
+
         // Duplicate prevention
         const processedMessageIds = new Set();
-        
+
         // Safe message adding function with duplicate prevention
         const addMessage = (messageData) => {
           const messageId = messageData.id;
-          
+
           // Check both Set and array for duplicates
           if (processedMessageIds.has(messageId) || messages.value.find(m => m.id === messageId)) {
             console.log('=== DEBUG: ❌ Message already processed, skipping ===', messageId);
             return false;
           }
-          
+
           // Add to processed set
           processedMessageIds.add(messageId);
-          
+
           // Add to messages array
           messages.value.push(messageData);
           console.log('=== DEBUG: ✅ New message added ===', messageId);
-          
+
           // Update last message ID
           if (messageId > lastMessageId.value) {
             lastMessageId.value = messageId;
           }
-          
+
           // Scroll and update unread count
           setTimeout(() => scrollToBottom(), 100);
           if (!isOpen.value) {
             unreadCount.value++;
           }
-          
+
           return true;
         };
 
@@ -511,11 +511,11 @@
             // Clear existing messages and processed IDs
             messages.value = [];
             processedMessageIds.clear();
-            
+
             // Validate messages before adding
             if (data.messages && Array.isArray(data.messages)) {
               const validMessages = data.messages.filter(msg => msg && typeof msg === 'object' && msg.id);
-              
+
               validMessages.forEach(msg => {
                 const formattedMessage = {
                   id: msg.id,
@@ -1409,11 +1409,7 @@
                     {{ websocketConnected ? 'WS' : 'Polling' }}
                   </span>
                 </div>
-                <button @click="updateWidget" style="color: rgba(255, 255, 255, 0.8); background: none; border: none; cursor: pointer; transition: color 0.3s; padding: 4px;" title="Update widget">
-                  <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
+               
                 <button @click="toggleChat" style="color: rgba(255, 255, 255, 0.8); background: none; border: none; cursor: pointer; transition: color 0.3s;">
                   <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
