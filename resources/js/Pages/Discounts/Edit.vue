@@ -1,0 +1,215 @@
+<template>
+    <div class="intro-y flex items-center mt-8">
+        <h2 class="text-lg font-medium mr-auto">
+            {{ pageTitle }}
+        </h2>
+    </div>
+
+    <div class="grid grid-cols-12 gap-5 mt-5 intro-y">
+        <div class="col-span-12 intro-y lg:col-span-8">
+            <TheInput
+                type="text"
+                label="Название RU"
+                v-model="form.title_ru"
+            />
+            <TheInput
+                type="text"
+                label="Название UZ"
+                v-model="form.title_uz"
+            />
+            <Slug v-model="form.slug"></Slug>
+            <Tab.Group class="mt-5 overflow-hidden intro-y box">
+                <div class="p-5 border rounded-md border-slate-200/60 dark:border-darkmode-400">
+                    <div class="mt-5">
+                        <FormLabel> Текст RU </FormLabel>
+                        <ClassicEditor
+                            type="text"
+                            class="px-4 py-3 pr-10 intro-y !box"
+                            v-model="form.description_ru"
+                        />
+                    </div>
+                    <div class="mt-5">
+                        <FormLabel> Текст UZ </FormLabel>
+                        <ClassicEditor
+                            type="text"
+                            class="px-4 py-3 pr-10 intro-y !box"
+                            v-model="form.description_uz"
+                        />
+                    </div>
+                </div>
+            </Tab.Group>
+            <TheInput
+                type="number"
+                label="Процент скидки"
+                v-model="form.percentage"
+            />
+            <FormLabel :style="'margin-top: 30px'"> Период проведения скидки </FormLabel>
+            <div class="grid grid-cols-4 gap-2">
+                <div>
+                    <FormLabel> Дата с </FormLabel>
+                    <Litepicker
+                        v-model="form.start_date"
+                        :options="{
+                            autoApply: true,
+                            format: 'YYYY-MM-DD',
+                            autoApply: autoApplyOption,
+                            dropdowns: {
+                                minYear: 1990,
+                                maxYear: null,
+                                months: true,
+                                years: true,
+
+                            },
+                        }"
+                        class="block w-56"
+                    />
+                </div>
+                <div>
+                    <FormLabel> Дата до </FormLabel>
+                    <Litepicker
+                        v-model="form.end_date"
+                        :options="{
+                            format: 'YYYY-MM-DD',
+                            autoApply: autoApplyOption,
+                            dropdowns: {
+                                minYear: 1990,
+                                maxYear: null,
+                                months: true,
+                                years: true,
+                            },
+                        }"
+                        class="block w-56"
+                    />
+                </div>
+            </div>
+            <div class="p-5 mt-5 border rounded-md border-slate-200/60 dark:border-darkmode-400">
+                <div class="flex items-center pb-5 font-medium border-b border-slate-200/60 dark:border-darkmode-400">
+                    <Lucide icon="ChevronDown" class="w-4 h-4 mr-2" />
+                    Фото
+                </div>
+                <div class="mt-5">
+                    <div class="mt-3">
+                        <SingleFileUpload v-model="form.image" :folder="'discounts'"/>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col items-center mt-8 intro-y sm:flex-row">
+                <div class="flex w-full mt-4 sm:w-auto sm:mt-0">
+                    <Menu>
+                        <Menu.Button @click="updateOrCreate('create')"
+                                     :as="Button"
+                                     variant="primary"
+                                     class="flex items-center shadow-md"
+                        >
+                            Сохранить
+                        </Menu.Button>
+                    </Menu>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+
+<script lang="ts">
+
+import { Link } from '@inertiajs/inertia-vue3'
+import Layout from '../../Shared/Layout.vue'
+import axios from 'axios'
+import moment from "moment";
+import TheInput from "../../custom-components/TheInput.vue";
+
+export default {
+    layout: Layout,
+    components: {
+        TheInput,
+        Link,
+    },
+    props: {
+        discount: {
+            type: [Object],
+            required: false
+        },
+        errors: Object,
+    },
+    computed: {
+        pageTitle() {
+            return this.discount ? 'Редактирование скидок' : 'Добавить скидки'
+        }
+    },
+    data() {
+        return {
+            form: {
+                title_ru: '',
+                title_uz: '',
+                slug: '',
+                image: '',
+                description_ru: '',
+                description_uz: '',
+                percentage: '',
+                start_date: '',
+                end_date: '',
+            },
+            autoApplyOption: false,
+            folder: '',
+        }
+    },
+
+    beforeMount() {
+        this.updateForm()
+    },
+    mounted() {
+        this.autoApplyOption = true
+    },
+    methods: {
+        updateOrCreate() {
+            if (this.discount) {
+                this.updateDiscount()
+            } else {
+                this.createDiscount()
+            }
+        },
+        updateDiscount() {
+            console.log(this.form)
+            this.$inertia.put(`/sale/discounts/${this.discount.id}`, this.form)
+        },
+        createDiscount() {
+            console.log(this.form)
+            this.$inertia.post('/sale/discounts', this.form)
+        },
+        updateForm() {
+            let fields = {
+                title_ru: '',
+                title_uz: '',
+                image: '',
+                description_ru: '',
+                description_uz: '',
+                percentage: '',
+                start_date: '',
+                end_date: '',
+                redirectTo: 'edit'
+            }
+
+            if (this.discount) {
+                fields = this.discount
+            }
+            this.form = this.$inertia.form(fields)
+        }
+    }
+}
+</script>
+
+<script setup lang="ts">
+import _ from "lodash";
+import { ref } from "vue";
+import fakerData from "../../utils/faker";
+import Button from "../../base-components/Button";
+import { FormInput, FormLabel, FormSwitch, FormTextarea } from "../../base-components/Form";
+import Lucide from "../../base-components/Lucide";
+import Tippy from "../../base-components/Tippy";
+import Litepicker from "../../base-components/Litepicker";
+import TomSelect from "../../base-components/TomSelect";
+import { ClassicEditor } from "../../base-components/Ckeditor";
+import { Menu, Tab } from "../../base-components/Headless";
+</script>

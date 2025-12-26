@@ -26,11 +26,17 @@ class ChatController extends Controller
 
         // Single optimized query with all necessary relationships
         $chatsQuery = Chat::with([
-            'user:id,first_name,last_name,email,image,role,last_activity',
+            'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
+            'user.department:id,name',
+            'user.organization:id,name',
+            'user.merchant:id,name,user_id',
             'lastMessage:id,chat_id,user_id,message,created_at,from_operator,read_at',
             'lastMessage.user:id,first_name,last_name',
             'widgetSession:id,session_id,visitor_name,visitor_email,visitor_phone,user_id',
-            'widgetSession.user:id,first_name,last_name,email'
+            'widgetSession.user:id,first_name,last_name,email,department_id,organization_id,position,phone,username,is_app_installed,created_at',
+            'widgetSession.user.department:id,name',
+            'widgetSession.user.organization:id,name',
+            'widgetSession.user.merchant:id,name,user_id'
         ])
             ->withCount(['messages', 'messages as unread_messages_count' => function ($query) use ($user) {
                 $query->where('user_id', '!=', $user->id)->whereNull('read_at');
@@ -78,10 +84,16 @@ class ChatController extends Controller
 
         // Single query to load chat with all relationships
         $chat->load([
-            'user:id,first_name,last_name,email,image,role,last_activity',
+            'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
+            'user.department:id,name',
+            'user.organization:id,name',
+            'user.merchant:id,name,user_id',
             'lastMessage:id,chat_id,user_id,message,created_at,from_operator',
             'widgetSession:id,session_id,visitor_name,visitor_email,visitor_phone,user_id',
-            'widgetSession.user:id,first_name,last_name,email'
+            'widgetSession.user:id,first_name,last_name,email,department_id,organization_id,position,phone,username,is_app_installed,created_at',
+            'widgetSession.user.department:id,name',
+            'widgetSession.user.organization:id,name',
+            'widgetSession.user.merchant:id,name,user_id'
         ]);
 
         // Single optimized query for messages with user data
@@ -98,9 +110,14 @@ class ChatController extends Controller
         // Only get users if needed for UI (support users or if chat has no participants)
         $users = collect();
         if ($user->isSupport()) {
-            $users = User::select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity')
+            $users = User::with([
+                'department:id,name',
+                'organization:id,name',
+                'merchant:id,name,user_id'
+            ])
+                ->select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity', 'department_id', 'organization_id', 'position', 'phone', 'username', 'is_app_installed', 'created_at')
                 ->where('id', '!=', $user->id)
-                ->limit(20) // Reduced from 50
+                ->limit(20)
                 ->get();
         }
 
@@ -289,7 +306,10 @@ class ChatController extends Controller
             if ($user->isSupport()) {
                 // Support users see all chats with optimized relationships
                 return Chat::with([
-                    'user:id,first_name,last_name,email,image,role,last_activity',
+                    'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
+                    'user.department:id,name',
+                    'user.organization:id,name',
+                    'user.merchant:id,name,user_id',
                     'lastMessage:id,chat_id,user_id,message,created_at,from_operator'
                 ])
                     ->latest('updated_at')
@@ -298,7 +318,10 @@ class ChatController extends Controller
             } else {
                 // Regular users see only their own chats
                 return Chat::with([
-                    'user:id,first_name,last_name,email,image,role,last_activity',
+                    'user:id,first_name,last_name,email,image,role,last_activity,department_id,organization_id,position,phone,username,is_app_installed,created_at',
+                    'user.department:id,name',
+                    'user.organization:id,name',
+                    'user.merchant:id,name,user_id',
                     'lastMessage:id,chat_id,user_id,message,created_at,from_operator'
                 ])
                     ->where('user_id', $user->id)
@@ -319,19 +342,30 @@ class ChatController extends Controller
 
         if (empty(trim($query))) {
             // Return all users if no search query
-            $users = User::where('id', '!=', $user->id)
-                ->select('id', 'first_name', 'last_name', 'email')
+            $users = User::with([
+                'department:id,name',
+                'organization:id,name',
+                'merchant:id,name,user_id'
+            ])
+                ->select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity', 'department_id', 'organization_id', 'position', 'phone', 'username', 'is_app_installed', 'created_at')
+                ->where('id', '!=', $user->id)
                 ->limit(50)
                 ->get();
         } else {
             // Search users by name or email
-            $users = User::where('id', '!=', $user->id)
+            $users = User::with([
+                'department:id,name',
+                'organization:id,name',
+                'merchant:id,name,user_id'
+            ])
+                ->select('id', 'first_name', 'last_name', 'email', 'image', 'role', 'last_activity', 'department_id', 'organization_id', 'position', 'phone', 'username', 'is_app_installed', 'created_at')
+                ->where('id', '!=', $user->id)
                 ->where(function ($q) use ($query) {
                     $q->where('first_name', 'LIKE', "%{$query}%")
                         ->orWhere('last_name', 'LIKE', "%{$query}%")
-                        ->orWhere('email', 'LIKE', "%{$query}%");
+                        ->orWhere('email', 'LIKE', "%{$query}%")
+                        ->orWhere('username', 'LIKE', "%{$query}%");
                 })
-                ->select('id', 'first_name', 'last_name', 'email')
                 ->limit(20)
                 ->get();
         }

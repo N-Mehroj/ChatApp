@@ -7,6 +7,7 @@ use App\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -81,6 +82,7 @@ class User extends Authenticatable
         'username',
         'uuid',
         'is_app_installed',
+        'app_version',
         'last_activity',
         'api_key',
         'role',
@@ -99,6 +101,11 @@ class User extends Authenticatable
         'name', // For compatibility with frontend
         'avatar_url',
         'is_online',
+        'mobile_app_installed',
+        'company_name',
+        'department_name',
+        'group_name',
+        'merchant_name',
     ];
 
     protected static function boot(): void
@@ -278,5 +285,61 @@ class User extends Authenticatable
     public function scopeOperatorsAndSupport(Builder $query): Builder
     {
         return $query->whereIn('role', [UserRole::Operator->value, UserRole::Support->value]);
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    public function stories(): BelongsToMany
+    {
+        return $this->belongsToMany(Story::class);
+    }
+
+    /**
+     * Get mobile app installed status (alias for is_app_installed)
+     */
+    public function getMobileAppInstalledAttribute(): bool
+    {
+        return (bool) $this->is_app_installed;
+    }
+
+    /**
+     * Get company name through organization relationship
+     */
+    public function getCompanyNameAttribute(): ?string
+    {
+        return $this->organization?->name;
+    }
+
+    /**
+     * Get department name through department relationship
+     */
+    public function getDepartmentNameAttribute(): ?string
+    {
+        return $this->department?->name;
+    }
+
+    /**
+     * Get group name (placeholder - implement based on your group model)
+     */
+    public function getGroupNameAttribute(): ?string
+    {
+        // TODO: Implement group relationship if you have a Group model
+        return null;
+    }
+
+    /**
+     * Get merchant name through merchant relationship
+     */
+    public function getMerchantNameAttribute(): ?string
+    {
+        return $this->merchant?->name;
     }
 }
