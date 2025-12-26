@@ -234,7 +234,7 @@ class ChatController extends Controller
         Log::info('Message broadcast sent', [
             'chat_id' => $chat->id,
             'message_id' => $message->id,
-            'channel' => 'chat.'.$chat->id,
+            'channel' => 'chat.' . $chat->id,
             'user_id' => $user->id,
             'from_operator' => $user->isSupport(),
         ]);
